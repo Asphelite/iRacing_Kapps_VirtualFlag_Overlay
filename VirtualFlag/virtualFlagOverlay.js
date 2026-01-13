@@ -7,7 +7,7 @@ const TEST_MODE = urlParams.get('test') === 'true' || urlParams.get('edit') === 
 const DISPLAY_MODE = urlParams.get('mode') || 'compact'; // 'compact' or 'split'
 const TEST_FLAG = urlParams.get('flag'); // specific flag to test (optional)
 const SHOW_MESSAGE = urlParams.get('text') !== 'false'; // show message text (default: true)
-const PANEL_OPACITY = parseFloat(urlParams.get('opacity')) || 0.35; // opacity of surrounding box (default: 0.35)
+const PANEL_OPACITY = urlParams.get('opacity') !== null ? parseFloat(urlParams.get('opacity')) : 0.35; // opacity of surrounding box (default: 0.35)
 const DEBUG_MODE = urlParams.get('debug') === 'true'; // debug logging (default: false)
 const IDLE_FADE_TIMEOUT_SECONDS = urlParams.get('idleFade') !== null ? parseInt(urlParams.get('idleFade')) : 15; // idle fade timeout in seconds (0 = off, default: 15)
 

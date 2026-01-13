@@ -77,20 +77,19 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     
     # These are the ACTUAL animation loop durations from virtualFlagOverlay.js
     FLAG_DURATIONS =
-        'checkered': 4000      # checkered pattern loops
-        'red': 2000            # solid red
-        'disqualify': 2000     # DQ pattern animation
-        'penalty': 2000        # penalty blink pattern (500ms x2 frames x2 loops)
-        'safetycar': 4000      # safety car animation with pattern
-        'slowdown': 2000       # slowdown flag animation
-        'meatball': 2000       # meatball blink pattern
-        'yellowWaving': 2000   # yellow waving (250ms x2 frames + flash x4 loops)
-        'yellow': 2000         # solid yellow blink
-        'debris': 2000         # debris flag animation
-        'oneLapToGreen': 2000  # one lap to go
-        'blue': 2000           # blue flag blink
-        'white': 2000          # white flag blink
-        'green': 2000          # green flag blink
+        'checkered': 4000      # 2 frames × 500ms × 4 loops
+        'disqualify': 8000     # 2 frames × 1000ms × 4 loops
+        'penalty': 4000        # 2 frames × 500ms × 4 loops
+        'safetycar': 11600     # (8×500 + 8×100 + 1×1000)ms × 2 loops = 5800ms per loop
+        'slowdown': 2000       # 2 frames × 500ms × 2 loops
+        'meatball': 4000       # 2 frames × 500ms × 4 loops
+        'yellowWaving': 2000   # 2 frames × 250ms × 4 loops
+        'yellow': 1500         # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
+        'debris': 3000         # 2 frames × 500ms × 3 loops (loopCount = 1500 / 500)
+        'oneLapToGreen': 2400  # 4 frames × 150ms × 4 loops
+        'blue': 1500           # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
+        'white': 1500          # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
+        'green': 1500          # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
     
     # No priority system - using simple FIFO ring queue instead
 
@@ -103,8 +102,6 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
         if hasFlag(FLAGS.CHECKERED)
             activeFlags['checkered'] = true
         if hasFlag(FLAGS.RED)
-            activeFlags['red'] = true
-        if hasFlag(FLAGS.DISQUALIFY)
             activeFlags['disqualify'] = true
         if hasFlag(FLAGS.BLACK)
             activeFlags['penalty'] = true
@@ -126,6 +123,8 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
             activeFlags['white'] = true
         if hasFlag(FLAGS.GREEN)
             activeFlags['green'] = true
+        if hasFlag(FLAGS.ONE_LAP_TO_GREEN)
+            activeFlags['oneLapToGreen'] = true
 
         return activeFlags
 
