@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VFlag - Virtual LED Matrix Flag</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body ng-controller="FlagCtrl">
+  <!-- Compact Mode (16x16 single matrix) -->
+  <div class="panel compact-mode" id="panel">
+    <div id="matrix" class="matrix"></div>
+    <div class="message" id="message">{{flagMessage}}</div>
+  </div>
+
+  <!-- Split Mode (16x8 + 16x8 side by side) -->
+  <div class="split-mode" id="panel-split">
+    <div class="split-container">
+      <div class="matrix-wrapper" id="matrix-wrapper-left">
+        <div id="matrix-left" class="matrix split-matrix"></div>
+      </div>
+      <div class="matrix-wrapper" id="matrix-wrapper-right">
+        <div id="matrix-right" class="matrix split-matrix"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load CoffeeScript compiler first -->
+  <script src="libs/coffee-script.js"></script>
+  
+  <!-- Load Angular framework -->
+  <script src="libs/angular/angular.min.js"></script>
+  
+  <!-- Load iRacing API library (CoffeeScript) -->
+  <script type="text/coffeescript" src="libs/ir.coffee"></script>
+  
+  <!-- Load animation engine -->
+  <script src="virtualFlagOverlay.js"></script>
+  
+  <!-- Load app (CoffeeScript) -->
+  <script type="text/coffeescript" src="app.coffee"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# Export ignore - these files won't be included in GitHub release downloads
+
+# Images and documentation
+images/ export-ignore
+
+# Configuration files
+.gitattributes export-ignore
+.gitignore export-ignore
