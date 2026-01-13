@@ -177,6 +177,7 @@ Each flag has its own unique animation:
 
 Created for iRacing Kapps overlay framework.
 All credit for the Kapps Overlay app go to [kutu](https://github.com/kutu).
+[iRSDK Documentation](https://sajax.github.io/irsdkdocs/telemetry/sessionflags.html#sessionflags)
 
 Overlay created by [Asphelite](https://github.com/Asphelite) ; &copy; 2026-01
 I dont want to see forks or claiming credit for yourself. Else I will come and find you (in Minecraft). :P
