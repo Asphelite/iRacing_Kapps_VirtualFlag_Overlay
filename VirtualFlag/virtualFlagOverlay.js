@@ -368,13 +368,13 @@ const meatballFrames_split = [
 const debrisFrames = [
   {
     pattern: (r, c) => {
-      return c % 2 === 0 ? 'yellow' : 'red';
+      return Math.floor(c / 2) % 2 === 0 ? 'yellow' : 'red';
     },
     duration: 500
   },
   {
     pattern: (r, c) => {
-      return c % 2 === 0 ? 'red' : 'yellow';
+      return Math.floor(c / 2) % 2 === 0 ? 'red' : 'yellow';
     },
     duration: 500
   }
@@ -384,13 +384,13 @@ const debrisFrames = [
 const debrisFrames_split = [
   {
     pattern: (r, c, side) => {
-      return c % 2 === 0 ? 'yellow' : 'red';
+      return Math.floor(c / 2) % 2 === 0 ? 'yellow' : 'red';
     },
     duration: 500
   },
   {
     pattern: (r, c, side) => {
-      return c % 2 === 0 ? 'red' : 'yellow';
+      return Math.floor(c / 2) % 2 === 0 ? 'red' : 'yellow';
     },
     duration: 500
   }
