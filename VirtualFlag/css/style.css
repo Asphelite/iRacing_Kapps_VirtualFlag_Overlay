@@ -3,7 +3,7 @@
   --panel-pad: 10px;
   --panel-bg: rgba(0, 0, 0, 0.35);
   --radius: 20px;
-  --glow: 0 0 10px rgba(255, 255, 255, 0.09);
+  --glow: none;
   --brightness: 1.0;
 }
 

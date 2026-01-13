@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" ng-app="virtual-flag-app">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VFlag - Virtual LED Matrix Flag</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body ng-controller="FlagCtrl">
   <!-- Compact Mode (16x16 single matrix) -->
-  <div class="panel compact-mode" id="panel" ng-controller="FlagCtrl">
+  <div class="panel compact-mode" id="panel">
     <div id="matrix" class="matrix"></div>
     <div class="message" id="message">{{flagMessage}}</div>
   </div>
@@ -37,7 +37,7 @@
   <!-- Load animation engine -->
   <script src="virtualFlagOverlay.js"></script>
   
-  <!-- Load app (CoffeeScript - will be compiled by coffee-script.js) -->
+  <!-- Load app (CoffeeScript) -->
   <script type="text/coffeescript" src="app.coffee"></script>
 </body>
 </html>
