@@ -3,9 +3,9 @@
 A professional LED matrix flag overlay for the Kapps iRacing overlay tool that displays race flags from your iRacing session. 
 Features 14+ flag animations with intelligent queuing and split/compact display modes.
 
-[!Green Flag Example](images/Overlay_Examples_Green.png)
-[!Double (Waving) Yellow Example](images/Overlay_Examples_DoubleYellow.png)
-[!Safety Car in Split Mode](images/Overlay_Examples_SC.png)
+![Green Flag Example](images/Overlay_Examples_Green.png)
+![!Double (Waving) Yellow Example](images/Overlay_Examples_DoubleYellow.png)
+![!Safety Car in Split Mode](images/Overlay_Examples_SC.png)
 
 <!-- ## Quick Start -->
 
@@ -30,7 +30,7 @@ Paste the `apps` directory you downloaded [from here](https://ir-apps.kutu.ru/#!
    ```
 directory.
 
-[!You can get the apps here:](images/Kapps_DownloadApps_Directory.png)
+![You can get the apps here:](images/Kapps_DownloadApps_Directory.png)
 
 5. **Download the VirtualFlag Widget** [The latest release](https://github.com/Asphelite/iRacing_Kapps_VirtualFlag_Overlay/releases/latest)
 6. **Copy the VirtualFlag directory** to your Kapps apps directory:
@@ -43,7 +43,7 @@ directory.
 1. Open Kapps, then head to `Settings`.
 2. In the `Settings` tab, the `Apps Folder` should now have this link pasted in (and clicking on the arrow should get you to the directory as well)
 
-[!This is how it needs to look once we added the `apps` directory to Kapps' `iRacingBrowserApps`](images/KappsSettings.png)
+![This is how it needs to look once we added the `apps` directory to Kapps' `iRacingBrowserApps`](images/KappsSettings.png)
 
 3. If thats all set, press `Save` and we can head to the next steps.
 
@@ -55,7 +55,7 @@ Next we add the widget to your overlay.
    - Name: You can add a name of your choice.
    - URL: `http://127.0.0.1:8182/VirtualFlag/` - This has to be this link.
 
-[!Yours could look like this too...](images/Kapps_AddCustomOverlay.png)
+![Yours could look like this too...](images/Kapps_AddCustomOverlay.png)
 
 ## Display Options (URL Parameters)
 
