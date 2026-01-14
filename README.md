@@ -132,7 +132,7 @@ green, yellow, yellowWaving, blue, white, penalty, disqualify, meatball, slowdow
 
 ### For anything more complex
 - Text Asphelite on [Kapps Discord](https://kapps.kutu.ru/discord/)
-- This is pretty self explanatory but I wont be able to help everyone installing this.
+- This is guide pretty self explanatory but I'll try my best to help you.
 
 
 ## How It Works
