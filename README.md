@@ -147,7 +147,7 @@ The app monitors real-time `SessionFlags` from iRacing and displays the current 
 - **Yellow Waving**  - A "Double Yellow" animation
 - **Blue**           - Faster traffic/lapping
 - **White**          - Final lap
-- **Penalty**        - Penalty/violation (slow down and improve)
+- **Penalty**        - Penalty/violation (naughty naughty)
 - **Disqualify**     - Disqualified
 - **Meatball**       - Your car is toast!
 - **Slow Down**      - Slow Down penalty when cutting the track
