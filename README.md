@@ -3,9 +3,12 @@
 A professional LED matrix flag overlay for the Kapps iRacing overlay tool that displays race flags from your iRacing session. 
 Features 14+ flag animations with intelligent queuing and split/compact display modes.
 
-![Green Flag Example](images/Overlay_Examples_Green.png)
-![!Double (Waving) Yellow Example](images/Overlay_Examples_DoubleYellow.png)
-![!Safety Car in Split Mode](images/Overlay_Examples_SC.png)
+## Demo
+
+<video width="400" height="300" controls>
+  <source src="images/animations.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 <!-- ## Quick Start -->
 
