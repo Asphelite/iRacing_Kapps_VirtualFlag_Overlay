@@ -35,7 +35,7 @@ directory.
 5. **Download the VirtualFlag Widget** [The latest release](https://github.com/Asphelite/iRacing_Kapps_VirtualFlag_Overlay/releases/latest)
 6. **Copy the VirtualFlag directory** to your Kapps apps directory:
    ```
-   C:\Users\[YourUsername]\AppData\Roaming\Kapps\iRacingBrowserApps\
+   C:\Users\[YourUsername]\AppData\Roaming\Kapps\iRacingBrowserApps\apps\
    ```
 
 ### Adding the Widget to Kapps
