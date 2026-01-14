@@ -32,6 +32,7 @@ const MATRIX_ROWS_FIXED = 16;
 const DEFAULT_FLAG_DURATION_MS = 1500;
 const GAP = 3;
 const TINY_MARGIN = 4;
+const BLUEFLAG_LOOP_COUNT = 4;
 const CHECKERED_LOOP_COUNT = 4;
 const PENALTY_LOOP_COUNT = 4;
 const SLOWDOWN_LOOP_COUNT = 2;
@@ -391,6 +392,54 @@ const debrisFrames_split = [
   {
     pattern: (r, c, side) => {
       return Math.floor(c / 2) % 2 === 0 ? 'red' : 'yellow';
+    },
+    duration: 500
+  }
+];
+
+// Blue flag with yellow diagonal stripe at 45° (compact 16x16)
+const blueFrames = [
+  {
+    pattern: (r, c) => {
+      // Diagonal stripe at 45° from bottom-left to top-right
+      // The stripe follows the diagonal where r + c is constant
+      const diagonal = r + c;
+      // Create a diagonal band (2px thick)
+      if (Math.abs(diagonal - 15) <= 1) {
+        return 'yellow';
+      }
+      return 'blue';
+    },
+    duration: 500
+  },
+  {
+    pattern: (r, c) => {
+      // Complete off for flashing effect
+      return 'black';
+    },
+    duration: 500
+  }
+];
+
+// Blue flag split mode (8x16 each) with yellow diagonal stripe at 45°
+const blueFrames_split = [
+  {
+    pattern: (r, c, side) => {
+      // Diagonal stripe at 45° from bottom-left to top-right
+      // The stripe follows the diagonal where r + c is constant
+      const diagonal = r + c;
+      // Create a diagonal band (2px thick)
+      if (Math.abs(diagonal - 11) <= 1) {
+        return 'yellow';
+      }
+      return 'blue';
+    },
+    duration: 500
+  },
+  {
+    pattern: (r, c, side) => {
+      // Complete off for flashing effect
+      return 'black';
     },
     duration: 500
   }
@@ -956,6 +1005,18 @@ async function playDebris(loopCount = DEFAULT_FLAG_DURATION_MS / 500) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
+async function playBlueFlag(loopCount = BLUEFLAG_LOOP_COUNT) {
+  resetIdleTimer();
+  const frames = DISPLAY_MODE === 'split' ? blueFrames_split : blueFrames;
+  for (let loop = 0; loop < loopCount; loop++) {
+    for (const frame of frames) {
+      await drawFrame(frame);
+      messageEl.textContent = 'BLUE';
+    }
+  }
+  if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
+}
+
 async function playOneLapToGreen(loopCount = PENALTY_LOOP_COUNT) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? oneLapToGreenFrames_split : oneLapToGreenFrames;
@@ -1025,7 +1086,7 @@ async function runTestMode() {
         if (TEST_FLAG === 'green') await playSimpleFlag('green');
         else if (TEST_FLAG === 'yellow') await playSimpleFlag('yellow');
         else if (TEST_FLAG === 'yellowWaving') await playYellowWaving();
-        else if (TEST_FLAG === 'blue') await playSimpleFlag('blue');
+        else if (TEST_FLAG === 'blue') await playBlueFlag();
         else if (TEST_FLAG === 'white') await playSimpleFlag('white');
         else if (TEST_FLAG === 'red') await playSimpleFlag('white');
         else if (TEST_FLAG === 'penalty') await playPenalty();
@@ -1054,7 +1115,7 @@ async function runTestMode() {
           if (flag === 'green') await playSimpleFlag('green');
           else if (flag === 'yellow') await playSimpleFlag('yellow');
           else if (flag === 'yellowWaving') await playYellowWaving();
-          else if (flag === 'blue') await playSimpleFlag('blue');
+          else if (flag === 'blue') await playBlueFlag();
           else if (flag === 'white') await playSimpleFlag('white');
           else if (flag === 'penalty') await playPenalty();
           else if (flag === 'slowdown') await playSlowDown();
@@ -1173,7 +1234,7 @@ window.flagTest = {
   green: () => playSimpleFlag('green'),
   yellow: () => playSimpleFlag('yellow'),
   yellowWaving: () => playYellowWaving(),
-  blue: () => playSimpleFlag('blue'),
+  blue: () => playBlueFlag(),
   white: () => playSimpleFlag('white'),
   red: () => playSimpleFlag('white'),
   penalty: () => playPenalty(),
