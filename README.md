@@ -168,9 +168,9 @@ Flags use a simple **ring queue**:
 ### Animation Sequences
 
 Each flag has its own unique animation:
-- **Simple flags** (Green, Yellow, Blue, White) - Flashing
-- **Complex animations** (OneLapToGo, Disqualify) - LED patterns
-- **Caution flags** (Yellow, Debris, Safety Car) - Directional animations
+- **Simple flags** (Green, Yellow, White) - Flashing
+- **Complex animations** (OneLapToGo, Disqualify, Blue Flag, etc.) - LED patterns
+- **Caution flags** ((Double)Yellow, Debris, Safety Car) - Directional animations
 - Animations queue automatically without overlapping
 
 ## Credits
