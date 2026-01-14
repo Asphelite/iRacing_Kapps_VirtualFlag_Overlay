@@ -10,6 +10,7 @@ const SHOW_MESSAGE = urlParams.get('text') !== 'false'; // show message text (de
 const PANEL_OPACITY = urlParams.get('opacity') !== null ? parseFloat(urlParams.get('opacity')) : 0.35; // opacity of surrounding box (default: 0.35)
 const DEBUG_MODE = urlParams.get('debug') === 'true'; // debug logging (default: false)
 const IDLE_FADE_TIMEOUT_SECONDS = urlParams.get('idleFade') !== null ? parseInt(urlParams.get('idleFade')) : 15; // idle fade timeout in seconds (0 = off, default: 15)
+const SC_VARIANT = urlParams.get('SCvariant') || 'complex'; // safety car variant: 'simple1', 'simple2', 'complex' (default: complex)
 
 // Debug logging wrapper
 const debugLog = (message, ...args) => {
@@ -144,6 +145,223 @@ const safetyCarFrames_split = [
     },
     duration: 1000
   },
+];
+
+// Safety Car - Simple variant (compact 16x16) - SC coords + animated rotating yellow border
+const safetyCarFrames_simple = [
+  {
+    pattern: (r, c) => {
+      const S = [
+        [4, 3], [5, 3], [6, 3], [7, 3], [11, 3], [4, 4], [7, 4], [11, 4], [4, 5], [8, 5], [11, 5], [4, 6], [8, 6], [9, 6], [10, 6], [11, 6],
+      ];
+      const C = [
+        [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [4, 10], [11, 10], [4, 11], [11, 11], [4, 12], [11, 12],
+      ];
+      const isS = S.some(([yr, yc]) => yr === r && yc === c);
+      const isC = C.some(([yr, yc]) => yr === r && yc === c);
+      if (isS || isC) return 'yellow';
+      if (isBorderAnimated_compact_yellow(r, c, 0)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  },
+  {
+    pattern: (r, c) => {
+      const S = [
+        [4, 3], [5, 3], [6, 3], [7, 3], [11, 3], [4, 4], [7, 4], [11, 4], [4, 5], [8, 5], [11, 5], [4, 6], [8, 6], [9, 6], [10, 6], [11, 6],
+      ];
+      const C = [
+        [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [4, 10], [11, 10], [4, 11], [11, 11], [4, 12], [11, 12],
+      ];
+      const isS = S.some(([yr, yc]) => yr === r && yc === c);
+      const isC = C.some(([yr, yc]) => yr === r && yc === c);
+      if (isS || isC) return 'yellow';
+      if (isBorderAnimated_compact_yellow(r, c, 1)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  },
+  {
+    pattern: (r, c) => {
+      const S = [
+        [4, 3], [5, 3], [6, 3], [7, 3], [11, 3], [4, 4], [7, 4], [11, 4], [4, 5], [8, 5], [11, 5], [4, 6], [8, 6], [9, 6], [10, 6], [11, 6],
+      ];
+      const C = [
+        [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [4, 10], [11, 10], [4, 11], [11, 11], [4, 12], [11, 12],
+      ];
+      const isS = S.some(([yr, yc]) => yr === r && yc === c);
+      const isC = C.some(([yr, yc]) => yr === r && yc === c);
+      if (isS || isC) return 'yellow';
+      if (isBorderAnimated_compact_yellow(r, c, 2)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  },
+  {
+    pattern: (r, c) => {
+      const S = [
+        [4, 3], [5, 3], [6, 3], [7, 3], [11, 3], [4, 4], [7, 4], [11, 4], [4, 5], [8, 5], [11, 5], [4, 6], [8, 6], [9, 6], [10, 6], [11, 6],
+      ];
+      const C = [
+        [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [4, 10], [11, 10], [4, 11], [11, 11], [4, 12], [11, 12],
+      ];
+      const isS = S.some(([yr, yc]) => yr === r && yc === c);
+      const isC = C.some(([yr, yc]) => yr === r && yc === c);
+      if (isS || isC) return 'yellow';
+      if (isBorderAnimated_compact_yellow(r, c, 3)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  }
+];
+
+// Safety Car - Simple variant (split 8x16) - SC coords + animated rotating yellow border
+const safetyCarFrames_simple_split = [
+  {
+    pattern: (r, c, side) => {
+      if (side === 'left') {
+        const S = [
+          [4, 2], [5, 2], [6, 2], [7, 2], [11, 2], [4, 3], [7, 3], [11, 3], [4, 4], [8, 4], [11, 4], [4, 5], [8, 5], [9, 5], [10, 5], [11, 5],
+        ];
+        const isS = S.some(([yr, yc]) => yr === r && yc === c);
+        if (isS) return 'yellow';
+      } else {
+        const C = [
+          [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [4, 3], [11, 3], [4, 4], [11, 4], [4, 5], [11, 5],
+        ];
+        const isC = C.some(([yr, yc]) => yr === r && yc === c);
+        if (isC) return 'yellow';
+      }
+      if (isBorderAnimated_split_yellow(r, c, 0)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  },
+  {
+    pattern: (r, c, side) => {
+      if (side === 'left') {
+        const S = [
+          [4, 2], [5, 2], [6, 2], [7, 2], [11, 2], [4, 3], [7, 3], [11, 3], [4, 4], [8, 4], [11, 4], [4, 5], [8, 5], [9, 5], [10, 5], [11, 5],
+        ];
+        const isS = S.some(([yr, yc]) => yr === r && yc === c);
+        if (isS) return 'yellow';
+      } else {
+        const C = [
+          [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [4, 3], [11, 3], [4, 4], [11, 4], [4, 5], [11, 5],
+        ];
+        const isC = C.some(([yr, yc]) => yr === r && yc === c);
+        if (isC) return 'yellow';
+      }
+      if (isBorderAnimated_split_yellow(r, c, 1)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  },
+  {
+    pattern: (r, c, side) => {
+      if (side === 'left') {
+        const S = [
+          [4, 2], [5, 2], [6, 2], [7, 2], [11, 2], [4, 3], [7, 3], [11, 3], [4, 4], [8, 4], [11, 4], [4, 5], [8, 5], [9, 5], [10, 5], [11, 5],
+        ];
+        const isS = S.some(([yr, yc]) => yr === r && yc === c);
+        if (isS) return 'yellow';
+      } else {
+        const C = [
+          [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [4, 3], [11, 3], [4, 4], [11, 4], [4, 5], [11, 5],
+        ];
+        const isC = C.some(([yr, yc]) => yr === r && yc === c);
+        if (isC) return 'yellow';
+      }
+      if (isBorderAnimated_split_yellow(r, c, 2)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  },
+  {
+    pattern: (r, c, side) => {
+      if (side === 'left') {
+        const S = [
+          [4, 2], [5, 2], [6, 2], [7, 2], [11, 2], [4, 3], [7, 3], [11, 3], [4, 4], [8, 4], [11, 4], [4, 5], [8, 5], [9, 5], [10, 5], [11, 5],
+        ];
+        const isS = S.some(([yr, yc]) => yr === r && yc === c);
+        if (isS) return 'yellow';
+      } else {
+        const C = [
+          [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [4, 3], [11, 3], [4, 4], [11, 4], [4, 5], [11, 5],
+        ];
+        const isC = C.some(([yr, yc]) => yr === r && yc === c);
+        if (isC) return 'yellow';
+      }
+      if (isBorderAnimated_split_yellow(r, c, 3)) return 'yellow';
+      return 'black';
+    },
+    duration: 150
+  }
+];
+
+// Safety Car - Simple2 variant (compact 16x16) - SC coords + solid yellow border + flashing animation
+const safetyCarFrames_simple2 = [
+  {
+    pattern: (r, c) => {
+      const border = 1;
+      const isBorder = r < border || r >= 16 - border || c < border || c >= 16 - border;
+      const S = [
+        [4, 3], [5, 3], [6, 3], [7, 3], [11, 3], [4, 4], [7, 4], [11, 4], [4, 5], [8, 5], [11, 5], [4, 6], [8, 6], [9, 6], [10, 6], [11, 6],
+      ];
+      const C = [
+        [5, 9], [6, 9], [7, 9], [8, 9], [9, 9], [10, 9], [4, 10], [11, 10], [4, 11], [11, 11], [4, 12], [11, 12],
+      ];
+      const isS = S.some(([yr, yc]) => yr === r && yc === c);
+      const isC = C.some(([yr, yc]) => yr === r && yc === c);
+      if (isBorder || isS || isC) return 'yellow';
+      return 'black';
+    },
+    duration: 1000
+  },
+  {
+    pattern: (r, c) => {
+      const border = 1;
+      const isBorder = r < border || r >= 16 - border || c < border || c >= 16 - border;
+      if (isBorder) return 'yellow';
+      return 'black';
+    },
+    duration: 1000
+  }
+];
+
+// Safety Car - Simple2 variant (split 8x16) - SC coords + solid yellow border + flashing animation
+const safetyCarFrames_simple2_split = [
+  {
+    pattern: (r, c, side) => {
+      const border = 1;
+      const isBorder = r < border || r >= 16 - border || c < border || c >= 8 - border;
+      
+      if (side === 'left') {
+        const S = [
+          [4, 2], [5, 2], [6, 2], [7, 2], [11, 2], [4, 3], [7, 3], [11, 3], [4, 4], [8, 4], [11, 4], [4, 5], [8, 5], [9, 5], [10, 5], [11, 5],
+        ];
+        const isS = S.some(([yr, yc]) => yr === r && yc === c);
+        if (isBorder || isS) return 'yellow';
+      } else {
+        const C = [
+          [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [4, 3], [11, 3], [4, 4], [11, 4], [4, 5], [11, 5],
+        ];
+        const isC = C.some(([yr, yc]) => yr === r && yc === c);
+        if (isBorder || isC) return 'yellow';
+      }
+      return 'black';
+    },
+    duration: 1000
+  },
+  {
+    pattern: (r, c, side) => {
+      const border = 1;
+      const isBorder = r < border || r >= 16 - border || c < border || c >= 8 - border;
+      if (isBorder) return 'yellow';
+      return 'black';
+    },
+    duration: 1000
+  }
 ];
 
 const penaltyFrames = [
@@ -525,6 +743,50 @@ function isBorderAnimated_split(r, c, animationOffset) {
   }
   
   // 4px stripes: 2 on, 2 off (with proper modulo handling for negative numbers)
+  const phase = ((perimeterDist - animationOffset) % 4 + 4) % 4;
+  return phase < 2;
+}
+
+// Helper function to check if border position is lit for animated yellow stripe (compact 16x16) - clockwise rotation (for Safety Car variants)
+function isBorderAnimated_compact_yellow(r, c, animationOffset) {
+  const borderDist = Math.min(r, c, 15 - r, 15 - c);
+  if (borderDist !== 0) return false;
+  
+  // Calculate perimeter distance for clockwise rotation (same as green version)
+  let perimeterDist = 0;
+  if (r === 0) {
+    perimeterDist = c;
+  } else if (c === 15) {
+    perimeterDist = 16 + (r - 1);
+  } else if (r === 15) {
+    perimeterDist = 31 + (14 - c);
+  } else if (c === 0) {
+    perimeterDist = 46 + (14 - r);
+  }
+  
+  // 4px stripes: 2 on, 2 off
+  const phase = ((perimeterDist - animationOffset) % 4 + 4) % 4;
+  return phase < 2;
+}
+
+// Helper function to check if border position is lit for animated yellow stripe (split 8x16) - clockwise rotation (for Safety Car variants)
+function isBorderAnimated_split_yellow(r, c, animationOffset) {
+  const borderDist = Math.min(r, c, 15 - r, 7 - c);
+  if (borderDist !== 0) return false;
+  
+  // Calculate perimeter distance for clockwise rotation (same as green version)
+  let perimeterDist = 0;
+  if (r === 0) {
+    perimeterDist = c;
+  } else if (c === 7) {
+    perimeterDist = 8 + (r - 1);
+  } else if (r === 15) {
+    perimeterDist = 23 + (6 - c);
+  } else if (c === 0) {
+    perimeterDist = 30 + (14 - r);
+  }
+  
+  // 4px stripes: 2 on, 2 off
   const phase = ((perimeterDist - animationOffset) % 4 + 4) % 4;
   return phase < 2;
 }
@@ -981,9 +1243,19 @@ async function playCheckered(loopCount = CHECKERED_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playSafetyCar(loopCount = SAFETYCAR_LOOP_COUNT) {
+async function playSafetyCar(loopCount = SAFETYCAR_LOOP_COUNT, variant = SC_VARIANT) {
   resetIdleTimer();
-  const frames = DISPLAY_MODE === 'split' ? safetyCarFrames_split : safetyCarFrames;
+  
+  let frames;
+  if (variant === 'simple1') {
+    frames = DISPLAY_MODE === 'split' ? safetyCarFrames_simple_split : safetyCarFrames_simple;
+  } else if (variant === 'simple2') {
+    frames = DISPLAY_MODE === 'split' ? safetyCarFrames_simple2_split : safetyCarFrames_simple2;
+  } else {
+    // Default to complex variant
+    frames = DISPLAY_MODE === 'split' ? safetyCarFrames_split : safetyCarFrames;
+  }
+  
   for (let loop = 0; loop < loopCount; loop++) {
     for (const frame of frames) {
       await drawFrame(frame);
@@ -1093,7 +1365,7 @@ async function runTestMode() {
         else if (TEST_FLAG === 'slowdown') await playSlowDown();
         else if (TEST_FLAG === 'meatball') await playMeatball();
         else if (TEST_FLAG === 'checkered') await playCheckered();
-        else if (TEST_FLAG === 'safetycar') await playSafetyCar();
+        else if (TEST_FLAG === 'safetycar') await playSafetyCar(SAFETYCAR_LOOP_COUNT, SC_VARIANT);
         else if (TEST_FLAG === 'debris') await playDebris();
         else if (TEST_FLAG === 'oneLapToGreen') await playOneLapToGreen();
         else if (TEST_FLAG === 'disqualify') await playDisqualify();
@@ -1121,7 +1393,7 @@ async function runTestMode() {
           else if (flag === 'slowdown') await playSlowDown();
           else if (flag === 'meatball') await playMeatball();
           else if (flag === 'checkered') await playCheckered();
-          else if (flag === 'safetycar') await playSafetyCar();
+          else if (flag === 'safetycar') await playSafetyCar(SAFETYCAR_LOOP_COUNT, SC_VARIANT);
           else if (flag === 'debris') await playDebris();
           else if (flag === 'oneLapToGreen') await playOneLapToGreen();
           else if (flag === 'disqualify') await playDisqualify();
