@@ -962,7 +962,7 @@ async function playOneLapToGreen(loopCount = PENALTY_LOOP_COUNT) {
   for (let loop = 0; loop < loopCount; loop++) {
     for (const frame of frames) {
       await drawFrame(frame);
-      messageEl.textContent = '1 LAP';
+      messageEl.textContent = '1 LAP TO GREEN';
     }
   }
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();

@@ -25,7 +25,7 @@ FLAGS =
     DISQUALIFY: 0x00020000
 
 app.service 'iRService', ($rootScope) ->
-    ir = new IRacing ['SessionFlags'], [], 100
+    ir = new IRacing ['SessionFlags', 'SessionInfo'], [], 100
     console.log('iRService initialized, connecting to Kapps at 127.0.0.1:8182...')
 
     ir.onConnect = ->
@@ -49,8 +49,33 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     previousDisplayedFlag = null
     flagQueue = []  # Queue of flag names to display
     currentQueueIndex = 0
+    sessionType = null  # Will be 'race', 'practice', 'qualify', 'test', etc.
     
     console.log('FlagCtrl initialized, ir object:', ir)
+    
+    # Parse SessionInfo YAML to detect session type
+    detectSessionType = (sessionInfo) ->
+        if not sessionInfo
+            return null
+        
+        # Look for session type in YAML (typically "SessionType: Race" or similar)
+        try
+            # Simple regex search for session type
+            typeMatch = sessionInfo.match(/Sessions:\s*-\s*SessionType:\s*(\w+)/i)
+            if typeMatch and typeMatch[1]
+                return typeMatch[1].toLowerCase()
+        catch e
+            console.error("Error parsing SessionInfo:", e)
+        
+        return null
+    
+    # Watch for SessionInfo changes to update session type
+    $scope.$watch 'ir.SessionInfo', (info) ->
+        if info
+            newType = detectSessionType(info)
+            if newType != sessionType
+                sessionType = newType
+                console.log("Session type detected:", sessionType)
     
     # Helper function to clear the display
     clearDisplay = ->
@@ -123,7 +148,7 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
             activeFlags['white'] = true
         if hasFlag(FLAGS.GREEN)
             activeFlags['green'] = true
-        if hasFlag(FLAGS.ONE_LAP_TO_GREEN)
+        if hasFlag(FLAGS.ONE_LAP_TO_GREEN) and sessionType != 'test'
             activeFlags['oneLapToGreen'] = true
 
         return activeFlags
