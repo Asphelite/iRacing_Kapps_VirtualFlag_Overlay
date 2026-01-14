@@ -179,8 +179,8 @@ Created for iRacing Kapps overlay framework.
 All credit for the Kapps Overlay app go to [kutu](https://github.com/kutu).
 [iRSDK Documentation](https://sajax.github.io/irsdkdocs/telemetry/sessionflags.html#sessionflags)
 
-Overlay created by [Asphelite](https://github.com/Asphelite) ; &copy; 2026-01
-I dont want to see forks for the purpose of re-publishing or claiming credit for someone elses work. Else.. well, I dont know.
+Overlay created by [Asphelite](https://github.com/Asphelite) ; &copy; 2026-01 <br>
+Credit where credit is due. If you use my work in any form I would greatly appreciate credit and/or mentions in accordance with common knowledge and attached licenses - Thanks!
 If it crashes your sim or your Kapps, thats bad. But I dont want to be held accountable so like always with mods etc.: Use at your own discretion!
 
 For issues or feature requests, contact [Asphelite](https://github.com/Asphelite) on the [Kapps Discord](https://kapps.kutu.ru/discord/) or visit the [repository](https://github.com/Asphelite/iRacing_Kapps_VirtualFlag_Overlay) and [create an issue](https://github.com/Asphelite/iRacing_Kapps_VirtualFlag_Overlay/issues).
