@@ -53,17 +53,23 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     
     console.log('FlagCtrl initialized, ir object:', ir)
     
-    # Parse SessionInfo YAML to detect session type
+    # Parse SessionInfo to detect session type
     detectSessionType = (sessionInfo) ->
         if not sessionInfo
             return null
         
-        # Look for session type in YAML (typically "SessionType: Race" or similar)
         try
-            # Simple regex search for session type
-            typeMatch = sessionInfo.match(/Sessions:\s*-\s*SessionType:\s*(\w+)/i)
-            if typeMatch and typeMatch[1]
-                return typeMatch[1].toLowerCase()
+            # SessionInfo can be an object or string, depending on Kapps version
+            if typeof sessionInfo == 'object'
+                # If it's an object, try to access Sessions array
+                if sessionInfo.Sessions and Array.isArray(sessionInfo.Sessions) and sessionInfo.Sessions.length > 0
+                    sessionType = sessionInfo.Sessions[0].SessionType
+                    return sessionType.toLowerCase() if sessionType
+            else if typeof sessionInfo == 'string'
+                # If it's a string, parse it with regex
+                typeMatch = sessionInfo.match(/Sessions:\s*-\s*SessionType:\s*(\w+)/i)
+                if typeMatch and typeMatch[1]
+                    return typeMatch[1].toLowerCase()
         catch e
             console.error("Error parsing SessionInfo:", e)
         
@@ -148,7 +154,7 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
             activeFlags['white'] = true
         if hasFlag(FLAGS.GREEN)
             activeFlags['green'] = true
-        if hasFlag(FLAGS.ONE_LAP_TO_GREEN) and sessionType != 'test'
+        if hasFlag(FLAGS.ONE_LAP_TO_GREEN) and sessionType and !sessionType.includes('test') and !sessionType.includes('offline')
             activeFlags['oneLapToGreen'] = true
 
         return activeFlags
