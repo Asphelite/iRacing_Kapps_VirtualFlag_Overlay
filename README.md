@@ -142,20 +142,20 @@ green, yellow, yellowWaving, blue, white, penalty, disqualify, meatball, slowdow
 The app monitors real-time `SessionFlags` from iRacing and displays the current flag. It intelligently queues multiple simultaneous flags based on racing priority.
 
 **Supported Flags:**
-- **Green** - Session green
-- **Yellow** - General caution
-- **Yellow Waving** - Direction-specific waving yellow
-- **Blue** - Faster traffic/lapping
-- **White** - Final lap
-- **Penalty** - Penalty/violation (slow down and improve)
-- **Disqualify** - Disqualified
-- **Meatball** - Mechanical issues (slow down and pit)
-- **Slow Down** - Excessive speed or violation
-- **One Lap To Go** - Final lap of race (animated)
-- **Checkered** - Race finished
-- **Safety Car** - Safety car deployed
-- **Debris** - Debris on track
-- **Red** - Session stopped (Not implemented as theres no 'Red Flag' in iRacing)
+- **Green**          - Session Green (Simple Green)
+- **Yellow**         - General caution (Simple Yellow)
+- **Yellow Waving**  - A "Double Yellow" animation
+- **Blue**           - Faster traffic/lapping
+- **White**          - Final lap
+- **Penalty**        - Penalty/violation (slow down and improve)
+- **Disqualify**     - Disqualified
+- **Meatball**       - Your car is toast!
+- **Slow Down**      - Slow Down penalty when cutting the track
+- **One Lap To Go**  - Final lap of race (animated)
+- **Checkered**      - Race over.
+- **Safety Car**     - Safety car deployed
+- **Debris**         - Debris on track
+- **Red**            - Session stopped (Not implemented as theres no 'Red Flag' in iRacing)
 
 ### Flag Queueing
 
@@ -181,5 +181,6 @@ All credit for the Kapps Overlay app go to [kutu](https://github.com/kutu).
 
 Overlay created by [Asphelite](https://github.com/Asphelite) ; &copy; 2026-01
 I dont want to see forks or claiming credit for yourself. Else I will come and find you (in Minecraft). :P
+If it crashes your sim or your Kapps, thats bad. But I dont want to be held accountable so like always with mods etc.: Use at your own discretion!
 
 For issues or feature requests, contact [Asphelite](https://github.com/Asphelite) on the [Kapps Discord](https://kapps.kutu.ru/discord/) or visit the [repository](https://github.com/Asphelite/iRacing_Kapps_VirtualFlag_Overlay) and [create an issue](https://github.com/Asphelite/iRacing_Kapps_VirtualFlag_Overlay/issues).
