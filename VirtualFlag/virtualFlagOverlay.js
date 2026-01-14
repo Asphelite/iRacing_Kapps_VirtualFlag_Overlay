@@ -38,9 +38,37 @@ const CHECKERED_LOOP_COUNT = 4;
 const PENALTY_LOOP_COUNT = 4;
 const SLOWDOWN_LOOP_COUNT = 2;
 const MEATBALL_LOOP_COUNT = 4;
-const SAFETYCAR_LOOP_COUNT = 2;
 
 const simpleFlagDuration = DEFAULT_FLAG_DURATION_MS;
+
+// Calculate Safety Car loop count and duration based on variant
+const getSafetyCarConfig = (variant) => {
+  switch (variant) {
+    case 'simple1':
+      // 4 frames × 150ms = 600ms per loop
+      return { loopCount: 4, durationMs: 2400 };
+    case 'simple2':
+      // 2 frames × 1000ms = 2000ms per loop
+      return { loopCount: 2, durationMs: 4000 };
+    case 'complex':
+    default:
+      // (8×500 + 8×100 + 1×1000)ms = 5800ms per loop
+      return { loopCount: 2, durationMs: 11600 };
+  }
+};
+
+const SAFETYCAR_CONFIG = getSafetyCarConfig(SC_VARIANT);
+const SAFETYCAR_LOOP_COUNT = SAFETYCAR_CONFIG.loopCount;
+const SAFETYCAR_DURATION_MS = SAFETYCAR_CONFIG.durationMs;
+
+// Expose to window for CoffeeScript access
+window.SAFETYCAR_DURATION_MS = SAFETYCAR_DURATION_MS;
+window.SAFETYCAR_LOOP_COUNT = SAFETYCAR_LOOP_COUNT;
+window.SC_VARIANT = SC_VARIANT;
+
+debugLog('SC_VARIANT:', SC_VARIANT);
+debugLog('SAFETYCAR_LOOP_COUNT:', SAFETYCAR_LOOP_COUNT);
+debugLog('SAFETYCAR_DURATION_MS:', SAFETYCAR_DURATION_MS);
 
 // Global state - will be set by initializeApp()
 let panel = null;
