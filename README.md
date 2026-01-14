@@ -155,15 +155,15 @@ The app monitors real-time `SessionFlags` from iRacing and displays the current 
 - **Checkered** - Race finished
 - **Safety Car** - Safety car deployed
 - **Debris** - Debris on track
-- **Red** - Session stopped
+- **Red** - Session stopped (Not implemented as theres no 'Red Flag' in iRacing)
 
-### Smart Flag Queuing
+### Flag Queueing
 
-When multiple flags occur simultaneously, the overlay intelligently displays them based on racing logic:
-- **Checkered** (race end) interrupts all other flags
-- **Safety Car** interrupts most flags but runs with caution flags
-- **Blue + Yellow** can display sequentially (faster car during caution)
-- Flags automatically remove when they're no longer active in iRacing
+Flags use a simple **ring queue**:
+- When multiple flags are active simultaneously, they're added to a queue in the order detected
+- Each flag plays its animation, then the queue moves to the next flag
+- As flags become inactive in iRacing, they're automatically removed from the queue
+- New active flags are appended to the end of the queue, maintaining playback order
 
 ### Animation Sequences
 
