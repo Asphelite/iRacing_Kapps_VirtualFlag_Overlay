@@ -1,6 +1,6 @@
 # Virtual Flag Overlay for Kapps (iRacing)
 
-A professional LED matrix flag overlay for the Kapps iRacing overlay tool that displays race flags from your iRacing session. 
+A custom LED matrix flag overlay for the Kapps iRacing overlay tool that displays race flags from your iRacing session. 
 Features 14+ flag animations with intelligent queuing and split/compact display modes.
 
 ## Demo
