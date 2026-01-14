@@ -64,9 +64,9 @@ You can customize the overlay's widget background appearance using URL parameter
 ### Display Mode
 
 **`?mode=split`**
-- Split screen with **two 8x16 LED matrices** side-by-side (30px gap)
+- Split screen with **two 8x16 LED matrices** side-by-side (resize your widget to make proper use of this)
 - Each matrix has its own background opacity
-- Better for wide displays
+- Better for placing the matrices at opposite ends of your virtual mirror for example
 - *Default: Compact mode*
 
 **`?mode=compact`**
