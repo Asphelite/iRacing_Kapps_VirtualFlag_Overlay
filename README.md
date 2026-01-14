@@ -100,14 +100,24 @@ You can customize the overlay's widget background appearance using URL parameter
 - Example: `?idleFade=20` for 20-second timeout
 - Default: 15 seconds
 
+### Safety Car Animation Variant
+
+**`?SCvariant=simple1|simple2|complex`**
+- Choose the Safety Car flag animation style
+- `?SCvariant=simple1` - Animated rotating yellow border with SC letters
+- `?SCvariant=simple2` - Solid yellow border with flashing SC letters
+- `?SCvariant=complex` - Complex animation pattern (default)
+- Default: `complex`
+- Example: `?SCvariant=simple1` for a "less obnoxious" animation
+
 ### Combined Examples
 
 You can combine multiple parameters:
 
 ```
-?mode=split&opacity=0.8&idleFade=20
+?mode=split&opacity=0.8&idleFade=20&SCvariant=simple1
 ?mode=compact&text=false&opacity=0.4&idleFade=0
-?mode=split&opacity=0.6&idleFade=30
+?mode=split&opacity=0.6&idleFade=30&SCvariant=complex
 ```
 
 ### Test Mode
