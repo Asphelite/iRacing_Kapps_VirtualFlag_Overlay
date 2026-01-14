@@ -5,10 +5,7 @@ Features 14+ flag animations with intelligent queuing and split/compact display 
 
 ## Demo
 
-<video width="400" height="300" controls>
-  <source src="images/animations.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+[Watch the demo on YouTube](https://youtu.be/-9FrQy7Lx7M)
 
 <!-- ## Quick Start -->
 
