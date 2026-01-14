@@ -11,6 +11,9 @@ Features 14+ flag animations with intelligent queuing and split/compact display 
 
 ## Installation
 
+Important: If you're already using apps/widgets like the [Weather App](https://github.com/Rovlgut/ir_WeatherApp) you might already have the necessary things set up. The `apps` directory
+linked in the installation guide is necessary for my overlay to work - whether you have it installed in `%appdata%` or in your Documents does not matter. Its just important that iRacing "somehow" has access to it. This should make it clear to you that, if this is your first additional overlay, you need to follow the steps below. Else, simply get [the latest release](https://github.com/Asphelite/iRacing_Kapps_VirtualFlag_Overlay/releases/latest) and drop it into your custom overlays directory that you've already been using.
+
 ### Preparing Kapps
 
 The Kapps apps folder is located at:
@@ -174,6 +177,7 @@ Flags use a simple **ring queue**:
 - Each flag plays its animation, then the queue moves to the next flag
 - As flags become inactive in iRacing, they're automatically removed from the queue
 - New active flags are appended to the end of the queue, maintaining playback order
+- The green flag is the only flag that can overwrite other flags and their animations when it gets added to the queue. This is so that the green flag roughly starts playing when iRacing drops it too
 
 ### Animation Sequences
 
@@ -182,6 +186,9 @@ Each flag has its own unique animation:
 - **Complex animations** (OneLapToGo, Disqualify, Blue Flag, etc.) - LED patterns
 - **Caution flags** ((Double)Yellow, Debris, Safety Car) - Directional animations
 - Animations queue automatically without overlapping
+
+### Issues and / or Limitations
+- The app might not properly recognize that iRacing has closed, so if you dont hide the widget in the replay or when you're not in iRacing you might still see the last flag that was playing on constant loop. You can clear it by re-opening the overlay.
 
 ## Credits
 
