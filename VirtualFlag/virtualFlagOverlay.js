@@ -1082,8 +1082,8 @@ function fadeOutToBlack(duration, steps = 10, keepFaded = false, backgroundEleme
             const b = match[2];
             const newAlpha = parseFloat(match[3]) * (1 - t);
             el.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${newAlpha})`;
-            // Also fade the shadow
-            el.style.boxShadow = `0 0 10px rgba(255, 255, 255, ${0.09 * (1 - t)})`;
+            // Remove shadow during fade
+            el.style.boxShadow = 'none';
           }
         }
       });
@@ -1342,9 +1342,13 @@ async function playDisqualify(loopCount = PENALTY_LOOP_COUNT) {
 }
 
 async function playOff(duration = 500) {
-  resetIdleTimer();
-  clearAll();
-  messageEl.textContent = 'Ready';
+  // Don't reset idle timer for the 'off' animation - this is called by clearDisplay()
+  // and shouldn't interrupt the fade timeout
+  // Also, if we're already faded out, don't update the display at all to preserve fade state
+  if (!isFadedOut) {
+    clearAll();
+    messageEl.textContent = 'Ready';
+  }
   await sleep(duration);
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
