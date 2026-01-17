@@ -7,6 +7,12 @@ Features 14+ flag animations with intelligent queuing and split/compact display 
 
 [Watch the demo on YouTube](https://youtu.be/-9FrQy7Lx7M)
 
+## Discord
+
+I made a Discord Server specifically for all my mods so I can provide support and post updates freely.
+
+[Asphelite's Modding Discord Invite Link](https://discord.gg/rfqx7Wx7MB)
+
 <!-- ## Quick Start -->
 
 ## Installation
