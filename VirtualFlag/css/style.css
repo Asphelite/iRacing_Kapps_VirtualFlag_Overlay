@@ -90,6 +90,10 @@ body {
   transition: background 200ms linear, box-shadow 200ms linear, opacity 200ms linear;
 }
 
+.led.no-transition {
+  transition: none;
+}
+
 .led.on {
   box-shadow: 0 0 8px currentColor, 0 0 18px currentColor;
 }
@@ -137,23 +141,6 @@ body {
   background: currentColor;
 }
 
-@keyframes blink-fast {
-  0%,
-  50%,
-  100% {
-    opacity: 1;
-  }
-
-  25%,
-  75% {
-    opacity: 0;
-  }
-}
-
-.flash-fast {
-  animation: blink-fast 0.8s step-start infinite;
-}
-
 .message {
   margin-top: 2px;
   font-size: 12px;
@@ -161,6 +148,15 @@ body {
   font-weight: bold;
   text-align: center;
   color: #ddd;
+  text-shadow:
+    -1px -1px 0 rgba(0, 0, 0, 0.8),
+    1px -1px 0 rgba(0, 0, 0, 0.8),
+    -1px 1px 0 rgba(0, 0, 0, 0.8),
+    1px 1px 0 rgba(0, 0, 0, 0.8),
+    0 -1px 0 rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(0, 0, 0, 0.8),
+    -1px 0 0 rgba(0, 0, 0, 0.8),
+    1px 0 0 rgba(0, 0, 0, 0.8);
 }
 
 .split-mode .message {

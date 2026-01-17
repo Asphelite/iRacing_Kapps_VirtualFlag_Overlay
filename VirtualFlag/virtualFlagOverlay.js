@@ -30,16 +30,9 @@ debugLog('URL params:', Object.fromEntries(urlParams));
 const MATRIX_COLS_FIXED = DISPLAY_MODE === 'split' ? 8 : 16;
 const MATRIX_ROWS_FIXED = 16;
 
-const DEFAULT_FLAG_DURATION_MS = 1500;
+const DEFAULT_SIMPLE_FLAG_FRAME_MS = 750;  // Duration of each simple flag flash state (on or off), in milliseconds
 const GAP = 3;
 const TINY_MARGIN = 4;
-const BLUEFLAG_LOOP_COUNT = 4;
-const CHECKERED_LOOP_COUNT = 4;
-const PENALTY_LOOP_COUNT = 4;
-const SLOWDOWN_LOOP_COUNT = 2;
-const MEATBALL_LOOP_COUNT = 4;
-
-const simpleFlagDuration = DEFAULT_FLAG_DURATION_MS;
 
 // Calculate Safety Car loop count and duration based on variant
 const getSafetyCarConfig = (variant) => {
@@ -69,6 +62,331 @@ window.SC_VARIANT = SC_VARIANT;
 debugLog('SC_VARIANT:', SC_VARIANT);
 debugLog('SAFETYCAR_LOOP_COUNT:', SAFETYCAR_LOOP_COUNT);
 debugLog('SAFETYCAR_DURATION_MS:', SAFETYCAR_DURATION_MS);
+
+// Simple flag frame duration (can be overridden by config.ini) - controls flash speed
+let SIMPLE_FLAG_FRAME_MS = DEFAULT_SIMPLE_FLAG_FRAME_MS;
+
+// Frame durations for other flags (can be overridden by config.ini)
+let YELLOWWAVING_FRAME_MS = 250;
+let BLUE_FRAME_MS = 500;
+let PENALTY_FRAME_MS = 500;
+let MEATBALL_FRAME_MS = 500;
+let SLOWDOWN_FRAME_MS = 500;
+let DEBRIS_FRAME_MS = 500;
+let DISQUALIFY_FRAME_MS = 1000;
+let CHECKERED_FRAME_MS = 500;
+let ONELAPTOGREEN_FRAME_MS = 150;
+let SAFETYCAR_SIMPLE1_FRAME_MS = 150;
+let SAFETYCAR_SIMPLE2_FRAME_MS = 1000;
+
+// Expose to window for CoffeeScript queue access
+window.SIMPLE_FLAG_FRAME_MS = SIMPLE_FLAG_FRAME_MS;
+
+// Default flag loop counts (can be overridden by config.ini)
+let FLAG_LOOP_COUNTS = {
+  'green': 1,
+  'yellow': 1,
+  'yellowWaving': 1,
+  'blue': 4,
+  'white': 1,
+  'penalty': 4,
+  'disqualify': 4,
+  'meatball': 4,
+  'slowdown': 2,
+  'checkered': 4,
+  'safetycar': SAFETYCAR_LOOP_COUNT,
+  'debris': 1,
+  'oneLapToGreen': 2
+};
+
+// Default flag enable/disable (can be overridden by config.ini)
+let FLAG_ENABLED_CONFIG = {
+  'green': true,
+  'yellow': true,
+  'yellowWaving': true,
+  'blue': true,
+  'white': true,
+  'penalty': true,
+  'disqualify': true,
+  'meatball': true,
+  'slowdown': true,
+  'checkered': true,
+  'safetycar': true,
+  'debris': true,
+  'oneLapToGreen': true
+};
+
+// Frame duration definitions for calculating total animation time
+// Simple flags (green, yellow, white, debris) use SIMPLE_FLAG_FRAME_MS × 2 (on/off)
+// Other flags have their own base durations
+const FRAME_DURATIONS = {
+  'green': -1,              // Uses SIMPLE_FLAG_FRAME_MS
+  'yellow': -1,             // Uses SIMPLE_FLAG_FRAME_MS
+  'yellowWaving': 2000,     // Waving animation
+  'blue': 1000,             // 2 frames × 500ms = 1000ms per loop
+  'white': -1,              // Uses SIMPLE_FLAG_FRAME_MS
+  'penalty': 1000,          // 2 frames × 500ms = 1000ms per loop
+  'disqualify': 1000,       // Animated pattern
+  'meatball': 1000,         // Animated pattern
+  'slowdown': 1000,         // Animated pattern
+  'checkered': 2000,        // Animated pattern
+  'safetycar': -1,          // Special: use SAFETYCAR_DURATION_MS
+  'debris': -1,             // Uses SIMPLE_FLAG_FRAME_MS
+  'oneLapToGreen': 1200     // Animated pattern
+};
+
+// Track if config has been loaded
+let configLoaded = false;
+let configLoadAttempted = false;
+
+// Parse INI configuration file
+async function loadConfigFile() {
+  if (configLoadAttempted) {
+    debugLog('Config file already loaded/attempted');
+    return configLoaded;
+  }
+  
+  configLoadAttempted = true;
+  
+  try {
+    debugLog('Attempting to load config.ini...');
+    const response = await fetch('config.ini');
+    
+    if (!response.ok) {
+      console.warn('Config file not found (404), using default values');
+      debugLog('Config file not found, using defaults');
+      configLoaded = true;
+      return false;
+    }
+    
+    const text = await response.text();
+    console.log('Config file loaded, parsing...');
+    parseIniConfig(text);
+    configLoaded = true;
+    console.log('Config file parsed successfully');
+    debugLog('Config file loaded and parsed successfully');
+    return true;
+  } catch (e) {
+    console.error('Error loading config file:', e.message);
+    debugLog('Error loading config file:', e);
+    configLoaded = true;
+    return false;
+  }
+}
+
+// Parse INI format configuration
+function parseIniConfig(iniText) {
+  const lines = iniText.split('\n');
+  let currentSection = null;
+  let flagsEnabledCount = 0;
+  let loopCountsCount = 0;
+  let simpleFlagFrameUpdated = false;
+  let frameDurationsUpdated = 0;
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    // Skip comments and empty lines
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    
+    // Section headers [section_name]
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      currentSection = trimmed.slice(1, -1);
+      continue;
+    }
+    
+    // Parse key=value pairs
+    if (trimmed.includes('=')) {
+      const [key, value] = trimmed.split('=').map(s => s.trim());
+      
+      if (currentSection === 'flags_enabled') {
+        const flagName = key;
+        if (flagName in FLAG_ENABLED_CONFIG) {
+          const wasEnabled = FLAG_ENABLED_CONFIG[flagName];
+          FLAG_ENABLED_CONFIG[flagName] = value.toLowerCase() === 'true';
+          if (wasEnabled !== FLAG_ENABLED_CONFIG[flagName]) {
+            console.log(`  [flags_enabled] ${flagName} = ${FLAG_ENABLED_CONFIG[flagName]}`);
+          }
+          debugLog(`Flag '${flagName}' enabled: ${FLAG_ENABLED_CONFIG[flagName]}`);
+          flagsEnabledCount++;
+        } else {
+          console.warn(`  [flags_enabled] Unknown flag: ${flagName}`);
+        }
+      } else if (currentSection === 'loop_counts') {
+        const flagName = key;
+        if (flagName in FLAG_LOOP_COUNTS) {
+          const loopCount = parseInt(value);
+          if (!isNaN(loopCount) && loopCount > 0) {
+            const oldCount = FLAG_LOOP_COUNTS[flagName];
+            FLAG_LOOP_COUNTS[flagName] = loopCount;
+            if (oldCount !== loopCount) {
+              if (DEBUG_MODE) console.log(`  [loop_counts] ${flagName} = ${loopCount} (was ${oldCount})`);
+            }
+            debugLog(`Flag '${flagName}' custom loop count: ${loopCount}`);
+            loopCountsCount++;
+          } else {
+            console.warn(`  [loop_counts] Invalid value for ${flagName}: ${value}`);
+          }
+        } else {
+          console.warn(`  [loop_counts] Unknown flag: ${flagName}`);
+        }
+      } else if (currentSection === 'simple_flags') {
+        if (key === 'frame_ms') {
+          const frameMs = parseInt(value);
+          if (!isNaN(frameMs) && frameMs > 0) {
+            const oldValue = SIMPLE_FLAG_FRAME_MS;
+            SIMPLE_FLAG_FRAME_MS = frameMs;
+            if (oldValue !== frameMs) {
+              if (DEBUG_MODE) console.log(`  [simple_flags] frame_ms = ${frameMs}ms (was ${oldValue}ms)`);
+            }
+            debugLog(`Simple flag frame duration: ${frameMs}ms`);
+            simpleFlagFrameUpdated = true;
+          } else {
+            console.warn(`  [simple_flags] Invalid value for frame_ms: ${value}`);
+          }
+        }
+      } else if (currentSection === 'frame_durations') {
+        const frameMs = parseInt(value);
+        if (!isNaN(frameMs) && frameMs > 0) {
+          let updated = false;
+          switch(key) {
+            case 'yellowWaving_ms':
+              if (YELLOWWAVING_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] yellowWaving_ms = ${frameMs}ms (was ${YELLOWWAVING_FRAME_MS}ms)`);
+                YELLOWWAVING_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'blue_ms':
+              if (BLUE_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] blue_ms = ${frameMs}ms (was ${BLUE_FRAME_MS}ms)`);
+                BLUE_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'penalty_ms':
+              if (PENALTY_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] penalty_ms = ${frameMs}ms (was ${PENALTY_FRAME_MS}ms)`);
+                PENALTY_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'meatball_ms':
+              if (MEATBALL_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] meatball_ms = ${frameMs}ms (was ${MEATBALL_FRAME_MS}ms)`);
+                MEATBALL_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'slowdown_ms':
+              if (SLOWDOWN_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] slowdown_ms = ${frameMs}ms (was ${SLOWDOWN_FRAME_MS}ms)`);
+                SLOWDOWN_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'debris_ms':
+              if (DEBRIS_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] debris_ms = ${frameMs}ms (was ${DEBRIS_FRAME_MS}ms)`);
+                DEBRIS_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'disqualify_ms':
+              if (DISQUALIFY_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] disqualify_ms = ${frameMs}ms (was ${DISQUALIFY_FRAME_MS}ms)`);
+                DISQUALIFY_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'checkered_ms':
+              if (CHECKERED_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] checkered_ms = ${frameMs}ms (was ${CHECKERED_FRAME_MS}ms)`);
+                CHECKERED_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'oneLapToGreen_ms':
+              if (ONELAPTOGREEN_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] oneLapToGreen_ms = ${frameMs}ms (was ${ONELAPTOGREEN_FRAME_MS}ms)`);
+                ONELAPTOGREEN_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'safetycar_simple1_ms':
+              if (SAFETYCAR_SIMPLE1_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] safetycar_simple1_ms = ${frameMs}ms (was ${SAFETYCAR_SIMPLE1_FRAME_MS}ms)`);
+                SAFETYCAR_SIMPLE1_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            case 'safetycar_simple2_ms':
+              if (SAFETYCAR_SIMPLE2_FRAME_MS !== frameMs) {
+                if (DEBUG_MODE) console.log(`  [frame_durations] safetycar_simple2_ms = ${frameMs}ms (was ${SAFETYCAR_SIMPLE2_FRAME_MS}ms)`);
+                SAFETYCAR_SIMPLE2_FRAME_MS = frameMs;
+                updated = true;
+              }
+              break;
+            default:
+              console.warn(`  [frame_durations] Unknown setting: ${key}`);
+          }
+          if (updated) frameDurationsUpdated++;
+        } else {
+          console.warn(`  [frame_durations] Invalid value for ${key}: ${value}`);
+        }
+      }
+    }
+  }
+  
+  // Expose to window for CoffeeScript queue access
+  window.SIMPLE_FLAG_FRAME_MS = SIMPLE_FLAG_FRAME_MS;
+  
+  // DEBUG: Log all loop counts after parsing
+  if (DEBUG_MODE) console.log(`Config parsed: ${flagsEnabledCount} flags_enabled, ${loopCountsCount} loop_counts${simpleFlagFrameUpdated ? ', 1 simple_flags' : ''}${frameDurationsUpdated > 0 ? `, ${frameDurationsUpdated} frame_durations` : ''}`);
+  if (DEBUG_MODE) console.log('Parsed FLAG_LOOP_COUNTS:', JSON.stringify(FLAG_LOOP_COUNTS, null, 2));
+  if (DEBUG_MODE) console.log('Parsed FLAG_ENABLED_CONFIG:', JSON.stringify(FLAG_ENABLED_CONFIG, null, 2));
+}
+
+// Helper function to calculate flag duration from loop count
+function calculateFlagDuration(flagName) {
+  if (flagName === 'safetycar') {
+    // Safety car uses pre-calculated duration
+    return SAFETYCAR_DURATION_MS;
+  }
+  
+  const loopCount = FLAG_LOOP_COUNTS[flagName];
+  if (loopCount === undefined) {
+    console.warn(`Unknown flag for duration calculation: ${flagName}, using default 1500ms`);
+    return 1500;
+  }
+  
+  const frameDuration = FRAME_DURATIONS[flagName];
+  if (frameDuration === undefined) {
+    console.warn(`No frame duration defined for flag: ${flagName}, using default 1500ms`);
+    return 1500;
+  }
+  
+  // Special handling for simple flags marked with -1
+  if (frameDuration === -1) {
+    return SIMPLE_FLAG_FRAME_MS * 2 * loopCount;  // 2 frames for on/off cycle
+  }
+  
+  return frameDuration * loopCount;
+}
+
+// Helper function to get flag duration (respects config overrides)
+function getFlagDuration(flagName) {
+  const duration = calculateFlagDuration(flagName);
+  if (DEBUG_MODE) console.log(`[getFlagDuration] ${flagName}: ${duration}ms (loopCount=${FLAG_LOOP_COUNTS[flagName]}, SIMPLE_FLAG_FRAME_MS=${SIMPLE_FLAG_FRAME_MS})`);
+  return duration;
+}
+
+// Helper function to check if flag is enabled
+function isFlagEnabled(flagName) {
+  const enabled = FLAG_ENABLED_CONFIG[flagName] !== false;
+  if (DEBUG_MODE) console.log(`[isFlagEnabled] ${flagName}: ${enabled}`);
+  return enabled;
+}
 
 // Global state - will be set by initializeApp()
 let panel = null;
@@ -191,7 +509,7 @@ const safetyCarFrames_simple = [
       if (isBorderAnimated_compact_yellow(r, c, 0)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -207,7 +525,7 @@ const safetyCarFrames_simple = [
       if (isBorderAnimated_compact_yellow(r, c, 1)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -223,7 +541,7 @@ const safetyCarFrames_simple = [
       if (isBorderAnimated_compact_yellow(r, c, 2)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -239,7 +557,7 @@ const safetyCarFrames_simple = [
       if (isBorderAnimated_compact_yellow(r, c, 3)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   }
 ];
 
@@ -263,7 +581,7 @@ const safetyCarFrames_simple_split = [
       if (isBorderAnimated_split_yellow(r, c, 0)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
@@ -283,7 +601,7 @@ const safetyCarFrames_simple_split = [
       if (isBorderAnimated_split_yellow(r, c, 1)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
@@ -303,7 +621,7 @@ const safetyCarFrames_simple_split = [
       if (isBorderAnimated_split_yellow(r, c, 2)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
@@ -323,7 +641,7 @@ const safetyCarFrames_simple_split = [
       if (isBorderAnimated_split_yellow(r, c, 3)) return 'yellow';
       return 'black';
     },
-    duration: 150
+    duration: SAFETYCAR_SIMPLE1_FRAME_MS
   }
 ];
 
@@ -344,7 +662,7 @@ const safetyCarFrames_simple2 = [
       if (isBorder || isS || isC) return 'yellow';
       return 'black';
     },
-    duration: 1000
+    duration: SAFETYCAR_SIMPLE2_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -353,7 +671,7 @@ const safetyCarFrames_simple2 = [
       if (isBorder) return 'yellow';
       return 'black';
     },
-    duration: 1000
+    duration: SAFETYCAR_SIMPLE2_FRAME_MS
   }
 ];
 
@@ -379,7 +697,7 @@ const safetyCarFrames_simple2_split = [
       }
       return 'black';
     },
-    duration: 1000
+    duration: SAFETYCAR_SIMPLE2_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
@@ -388,7 +706,7 @@ const safetyCarFrames_simple2_split = [
       if (isBorder) return 'yellow';
       return 'black';
     },
-    duration: 1000
+    duration: SAFETYCAR_SIMPLE2_FRAME_MS
   }
 ];
 
@@ -397,13 +715,13 @@ const penaltyFrames = [
     pattern: (r, c) => {
       // True 45° diagonal split for square 16x16 matrix
       return r > c ? 'white' : 'black';
-    }, duration: 500
+    }, duration: PENALTY_FRAME_MS
   },
   {
     pattern: (r, c) => {
       // True 45° diagonal split (inverted)
       return r > c ? 'black' : 'white';
-    }, duration: 500
+    }, duration: PENALTY_FRAME_MS
   }
 ];
 
@@ -413,13 +731,37 @@ const penaltyFrames_split = [
     pattern: (r, c, side) => {
       // 45° diagonal split accounting for rectangular aspect ratio (2:1)
       return r > c * 2 ? 'white' : 'black';
-    }, duration: 500
+    }, duration: PENALTY_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
       // 45° diagonal split (inverted)
       return r > c * 2 ? 'black' : 'white';
-    }, duration: 500
+    }, duration: PENALTY_FRAME_MS
+  }
+];
+// Simple flags (green, yellow, white, debris) - on/off animation
+// These create solid color flashes controlled by SIMPLE_FLAG_FRAME_MS from config
+const createSimpleFlagFrames = (color) => [
+  {
+    pattern: () => color,
+    duration: SIMPLE_FLAG_FRAME_MS  // ON state
+  },
+  {
+    pattern: () => 'black',
+    duration: SIMPLE_FLAG_FRAME_MS  // OFF state
+  }
+];
+
+// Split mode simple flags - same as compact, pattern function handles both sides equally
+const createSimpleFlagFrames_split = (color) => [
+  {
+    pattern: () => color,
+    duration: SIMPLE_FLAG_FRAME_MS  // ON state
+  },
+  {
+    pattern: () => 'black',
+    duration: SIMPLE_FLAG_FRAME_MS  // OFF state
   }
 ];
 
@@ -429,13 +771,13 @@ const yellowWavingFrames = [
     pattern: (r, c) => {
       // 45° diagonal split for square 16x16 matrix
       return r > c ? 'yellow' : 'black';
-    }, duration: 250
+    }, duration: YELLOWWAVING_FRAME_MS
   },
   {
     pattern: (r, c) => {
       // 45° diagonal split (inverted)
       return r > c ? 'black' : 'yellow';
-    }, duration: 250
+    }, duration: YELLOWWAVING_FRAME_MS
   }
 ];
 
@@ -445,13 +787,13 @@ const yellowWavingFrames_split = [
     pattern: (r, c, side) => {
       // 45° diagonal split accounting for rectangular aspect ratio (2:1)
       return r > c * 2 ? 'yellow' : 'black';
-    }, duration: 250
+    }, duration: YELLOWWAVING_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
       // 45° diagonal split (inverted)
       return r > c * 2 ? 'black' : 'yellow';
-    }, duration: 250
+    }, duration: YELLOWWAVING_FRAME_MS
   }
 ];
 
@@ -464,7 +806,7 @@ const checkeredFrames = [
         return 'black';
       }
     },
-    duration: 500
+    duration: CHECKERED_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -474,7 +816,7 @@ const checkeredFrames = [
         return 'black';
       }
     },
-    duration: 500
+    duration: CHECKERED_FRAME_MS
   }
 ];
 
@@ -497,7 +839,7 @@ const slowDownFrames = [
       if (isBorder || isX || isD) return 'orange';
       return 'black';
     },
-    duration: 500
+    duration: SLOWDOWN_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -514,7 +856,7 @@ const slowDownFrames = [
       if (isBorder || isX || isD) return 'black';
       return 'orange';
     },
-    duration: 500
+    duration: SLOWDOWN_FRAME_MS
   }
 ];
 
@@ -525,32 +867,28 @@ const slowDownFrames_split = [
       const border = 1;
       const isBorder = r < border || r >= 16 - border || c < border || c >= 8 - border;
       if (side === 'left') {
-        // Left: orange border, black inside
         if (isBorder) return 'orange';
         return 'black';
       } else {
-        // Right: black border, orange inside (inverted)
         if (isBorder) return 'black';
         return 'orange';
       }
     },
-    duration: 500
+    duration: SLOWDOWN_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
       const border = 1;
       const isBorder = r < border || r >= 16 - border || c < border || c >= 8 - border;
       if (side === 'left') {
-        // Left: black border, orange inside
         if (isBorder) return 'black';
         return 'orange';
       } else {
-        // Right: orange border, black inside (inverted)
         if (isBorder) return 'orange';
         return 'black';
       }
     },
-    duration: 500
+    duration: SLOWDOWN_FRAME_MS
   }
 ];
 
@@ -569,7 +907,7 @@ const meatballFrames = [
       if (isBorder || isBall) return 'orange';
       return 'black';
     },
-    duration: 500
+    duration: MEATBALL_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -578,7 +916,7 @@ const meatballFrames = [
       if (isBorder) return 'orange';
       return 'black';
     },
-    duration: 500
+    duration: MEATBALL_FRAME_MS
   },
 ];
 
@@ -598,7 +936,7 @@ const meatballFrames_split = [
       if (isBorder || isBall) return 'orange';
       return 'black';
     },
-    duration: 500
+    duration: MEATBALL_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -607,7 +945,7 @@ const meatballFrames_split = [
       if (isBorder) return 'orange';
       return 'black';
     },
-    duration: 500
+    duration: MEATBALL_FRAME_MS
   },
 ];
 
@@ -617,13 +955,13 @@ const debrisFrames = [
     pattern: (r, c) => {
       return Math.floor(c / 2) % 2 === 0 ? 'yellow' : 'red';
     },
-    duration: 500
+    duration: DEBRIS_FRAME_MS
   },
   {
     pattern: (r, c) => {
       return Math.floor(c / 2) % 2 === 0 ? 'red' : 'yellow';
     },
-    duration: 500
+    duration: DEBRIS_FRAME_MS
   }
 ];
 
@@ -633,13 +971,13 @@ const debrisFrames_split = [
     pattern: (r, c, side) => {
       return Math.floor(c / 2) % 2 === 0 ? 'yellow' : 'red';
     },
-    duration: 500
+    duration: DEBRIS_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
       return Math.floor(c / 2) % 2 === 0 ? 'red' : 'yellow';
     },
-    duration: 500
+    duration: DEBRIS_FRAME_MS
   }
 ];
 
@@ -647,23 +985,19 @@ const debrisFrames_split = [
 const blueFrames = [
   {
     pattern: (r, c) => {
-      // Diagonal stripe at 45° from bottom-left to top-right
-      // The stripe follows the diagonal where r + c is constant
       const diagonal = r + c;
-      // Create a diagonal band (2px thick)
       if (Math.abs(diagonal - 15) <= 1) {
         return 'yellow';
       }
       return 'blue';
     },
-    duration: 500
+    duration: BLUE_FRAME_MS
   },
   {
     pattern: (r, c) => {
-      // Complete off for flashing effect
       return 'black';
     },
-    duration: 500
+    duration: BLUE_FRAME_MS
   }
 ];
 
@@ -671,23 +1005,19 @@ const blueFrames = [
 const blueFrames_split = [
   {
     pattern: (r, c, side) => {
-      // Diagonal stripe at 45° from bottom-left to top-right
-      // The stripe follows the diagonal where r + c is constant
       const diagonal = r + c;
-      // Create a diagonal band (2px thick)
       if (Math.abs(diagonal - 11) <= 1) {
         return 'yellow';
       }
       return 'blue';
     },
-    duration: 500
+    duration: BLUE_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
-      // Complete off for flashing effect
       return 'black';
     },
-    duration: 500
+    duration: BLUE_FRAME_MS
   }
 ];
 
@@ -827,7 +1157,7 @@ const oneLapToGreenFrames = [
       if (isBorderAnimated_compact(r, c, 0)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -835,7 +1165,7 @@ const oneLapToGreenFrames = [
       if (isBorderAnimated_compact(r, c, 1)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -843,7 +1173,7 @@ const oneLapToGreenFrames = [
       if (isBorderAnimated_compact(r, c, 2)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   },
   {
     pattern: (r, c) => {
@@ -851,7 +1181,7 @@ const oneLapToGreenFrames = [
       if (isBorderAnimated_compact(r, c, 3)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   }
 ];
 
@@ -863,7 +1193,7 @@ const oneLapToGreenFrames_split = [
       if (isBorderAnimated_split(r, c, 0)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
@@ -871,7 +1201,7 @@ const oneLapToGreenFrames_split = [
       if (isBorderAnimated_split(r, c, 1)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
@@ -879,7 +1209,7 @@ const oneLapToGreenFrames_split = [
       if (isBorderAnimated_split(r, c, 2)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   },
   {
     pattern: (r, c, side) => {
@@ -887,7 +1217,7 @@ const oneLapToGreenFrames_split = [
       if (isBorderAnimated_split(r, c, 3)) return 'green';
       return 'black';
     },
-    duration: 150
+    duration: ONELAPTOGREEN_FRAME_MS
   }
 ];
 
@@ -917,11 +1247,11 @@ const disqualifyFrames = [
     pattern: (r, c) => {
       return isFatCross_compact(r, c) ? 'white' : 'black';
     },
-    duration: 1000
+    duration: DISQUALIFY_FRAME_MS
   },
   {
     pattern: () => 'black',
-    duration: 1000
+    duration: DISQUALIFY_FRAME_MS
   }
 ];
 
@@ -931,11 +1261,11 @@ const disqualifyFrames_split = [
     pattern: (r, c, side) => {
       return isFatCross_split(r, c) ? 'white' : 'black';
     },
-    duration: 1000
+    duration: DISQUALIFY_FRAME_MS
   },
   {
     pattern: () => 'black',
-    duration: 1000
+    duration: DISQUALIFY_FRAME_MS
   }
 ];
 
@@ -1073,17 +1403,23 @@ function fadeOutToBlack(duration, steps = 10, keepFaded = false, backgroundEleme
       // Fade background elements as well
       backgroundElements.forEach(el => {
         if (el) {
-          const currentColor = window.getComputedStyle(el).backgroundColor;
-          // Extract current alpha and fade it
-          const match = currentColor.match(/[\d.]+/g);
-          if (match && match.length >= 4) {
-            const r = match[0];
-            const g = match[1];
-            const b = match[2];
-            const newAlpha = parseFloat(match[3]) * (1 - t);
-            el.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${newAlpha})`;
-            // Remove shadow during fade
-            el.style.boxShadow = 'none';
+          // Check if this is the message element (it has text-shadow, not backgroundColor to fade)
+          if (el === messageEl) {
+            el.style.opacity = 1 - t;
+          } else {
+            // Fade backgroundColor for panel and wrappers
+            const currentColor = window.getComputedStyle(el).backgroundColor;
+            // Extract current alpha and fade it
+            const match = currentColor.match(/[\d.]+/g);
+            if (match && match.length >= 4) {
+              const r = match[0];
+              const g = match[1];
+              const b = match[2];
+              const newAlpha = parseFloat(match[3]) * (1 - t);
+              el.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${newAlpha})`;
+              // Remove shadow during fade
+              el.style.boxShadow = 'none';
+            }
           }
         }
       });
@@ -1097,8 +1433,12 @@ function fadeOutToBlack(duration, steps = 10, keepFaded = false, backgroundEleme
           });
           backgroundElements.forEach(el => {
             if (el) {
-              el.style.backgroundColor = `rgba(0, 0, 0, ${PANEL_OPACITY})`;
-              el.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.09)';
+              if (el === messageEl) {
+                el.style.opacity = 1;
+              } else {
+                el.style.backgroundColor = `rgba(0, 0, 0, ${PANEL_OPACITY})`;
+                el.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.09)';
+              }
             }
           });
         }
@@ -1118,6 +1458,11 @@ function resetIdleTimer() {
     ld.style.opacity = 1;
   });
   
+  // Reset message opacity in compact mode
+  if (messageEl && DISPLAY_MODE !== 'split') {
+    messageEl.style.opacity = 1;
+  }
+  
   // Restore background opacity to original PANEL_OPACITY
   if (DISPLAY_MODE === 'split') {
     const wrapperLeft = document.getElementById('matrix-wrapper-left');
@@ -1128,11 +1473,14 @@ function resetIdleTimer() {
     if (panel) panel.style.backgroundColor = `rgba(0, 0, 0, ${PANEL_OPACITY})`;
   }
   
-  // Clear any existing idle fade timer
+  // Clear any existing idle fade timer and restart the monitor
   if (idleFadeTimer) {
     clearInterval(idleFadeTimer);
     idleFadeTimer = null;
   }
+  
+  // Restart the idle monitor for the new flag
+  startIdleMonitor();
 }
 
 function startIdleMonitor() {
@@ -1160,6 +1508,8 @@ function startIdleMonitor() {
         if (wrapperRight) backgroundElements.push(wrapperRight);
       } else {
         if (panel) backgroundElements.push(panel);
+        // Also fade message element in compact mode
+        if (messageEl) backgroundElements.push(messageEl);
       }
       
       fadeOutToBlack(FADE_DURATION_MS, 60, true, backgroundElements); // 60 steps for smooth fade
@@ -1174,7 +1524,8 @@ async function drawFrame(frame, isFirst = false) {
       const row = Math.floor(i / MATRIX_COLS);
       const col = i % MATRIX_COLS;
       const color = frame.pattern(row, col, 'left');
-      ld.className = `led ${color} on`;
+      ld.classList.add('no-transition');
+      ld.className = `led ${color} on no-transition`;
       ld.style.opacity = 1;
     });
     
@@ -1182,7 +1533,8 @@ async function drawFrame(frame, isFirst = false) {
       const row = Math.floor(i / MATRIX_COLS);
       const col = i % MATRIX_COLS;
       const color = frame.pattern(row, col, 'right');
-      ld.className = `led ${color} on`;
+      ld.classList.add('no-transition');
+      ld.className = `led ${color} on no-transition`;
       ld.style.opacity = 1;
     });
   } else {
@@ -1191,7 +1543,8 @@ async function drawFrame(frame, isFirst = false) {
       const row = Math.floor(i / MATRIX_COLS);
       const col = i % MATRIX_COLS;
       const color = frame.pattern(row, col);
-      ld.className = `led ${color} on`;
+      ld.classList.add('no-transition');
+      ld.className = `led ${color} on no-transition`;
       ld.style.opacity = 1;
     });
   }
@@ -1204,14 +1557,21 @@ async function drawFrame(frame, isFirst = false) {
 }
 
 // --- Flag Players ---
-async function playSimpleFlag(color, duration = simpleFlagDuration) {
+async function playSimpleFlag(color, loopCount = 1) {
   resetIdleTimer();
-  setAllColor(color, color === 'green' || color === 'yellow' || color === 'blue' || color === 'white' ? 'flash-fast' : '');
-  await sleep(duration);
+  const frames = DISPLAY_MODE === 'split' ? createSimpleFlagFrames_split(color) : createSimpleFlagFrames(color);
+  if (DEBUG_MODE) console.log(`[playSimpleFlag] color=${color}, loopCount=${loopCount}, frameMs=${SIMPLE_FLAG_FRAME_MS}, totalDuration=${SIMPLE_FLAG_FRAME_MS * 2 * loopCount}ms`);
+  
+  for (let loop = 0; loop < loopCount; loop++) {
+    for (const frame of frames) {
+      await drawFrame(frame);
+      messageEl.textContent = color.toUpperCase();
+    }
+  }
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playPenalty(loopCount = PENALTY_LOOP_COUNT) {
+async function playPenalty(loopCount = FLAG_LOOP_COUNTS['penalty']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? penaltyFrames_split : penaltyFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1223,7 +1583,7 @@ async function playPenalty(loopCount = PENALTY_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playYellowWaving(loopCount = PENALTY_LOOP_COUNT) {
+async function playYellowWaving(loopCount = FLAG_LOOP_COUNTS['yellowWaving']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? yellowWavingFrames_split : yellowWavingFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1235,7 +1595,7 @@ async function playYellowWaving(loopCount = PENALTY_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playSlowDown(loopCount = SLOWDOWN_LOOP_COUNT) {
+async function playSlowDown(loopCount = FLAG_LOOP_COUNTS['slowdown']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? slowDownFrames_split : slowDownFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1247,7 +1607,7 @@ async function playSlowDown(loopCount = SLOWDOWN_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playMeatball(loopCount = MEATBALL_LOOP_COUNT) {
+async function playMeatball(loopCount = FLAG_LOOP_COUNTS['meatball']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? meatballFrames_split : meatballFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1259,7 +1619,7 @@ async function playMeatball(loopCount = MEATBALL_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playCheckered(loopCount = CHECKERED_LOOP_COUNT) {
+async function playCheckered(loopCount = FLAG_LOOP_COUNTS['checkered']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? checkeredFrames_split : checkeredFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1271,7 +1631,7 @@ async function playCheckered(loopCount = CHECKERED_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playSafetyCar(loopCount = SAFETYCAR_LOOP_COUNT, variant = SC_VARIANT) {
+async function playSafetyCar(loopCount = FLAG_LOOP_COUNTS['safetycar'], variant = SC_VARIANT) {
   resetIdleTimer();
   
   let frames;
@@ -1293,7 +1653,7 @@ async function playSafetyCar(loopCount = SAFETYCAR_LOOP_COUNT, variant = SC_VARI
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playDebris(loopCount = DEFAULT_FLAG_DURATION_MS / 500) {
+async function playDebris(loopCount = FLAG_LOOP_COUNTS['debris']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? debrisFrames_split : debrisFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1305,7 +1665,7 @@ async function playDebris(loopCount = DEFAULT_FLAG_DURATION_MS / 500) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playBlueFlag(loopCount = BLUEFLAG_LOOP_COUNT) {
+async function playBlueFlag(loopCount = FLAG_LOOP_COUNTS['blue']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? blueFrames_split : blueFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1317,7 +1677,7 @@ async function playBlueFlag(loopCount = BLUEFLAG_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playOneLapToGreen(loopCount = PENALTY_LOOP_COUNT) {
+async function playOneLapToGreen(loopCount = FLAG_LOOP_COUNTS['oneLapToGreen']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? oneLapToGreenFrames_split : oneLapToGreenFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1329,7 +1689,7 @@ async function playOneLapToGreen(loopCount = PENALTY_LOOP_COUNT) {
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
-async function playDisqualify(loopCount = PENALTY_LOOP_COUNT) {
+async function playDisqualify(loopCount = FLAG_LOOP_COUNTS['disqualify']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? disqualifyFrames_split : disqualifyFrames;
   for (let loop = 0; loop < loopCount; loop++) {
@@ -1386,21 +1746,26 @@ async function runTestMode() {
     debugLog('Testing specific flag:', TEST_FLAG);
     while (TEST_MODE) {
       try {
+        if (!isFlagEnabled(TEST_FLAG)) {
+          console.warn(`Flag "${TEST_FLAG}" is disabled in config, skipping...`);
+          await sleep(1000);
+          continue;
+        }
         debugLog('Playing flag:', TEST_FLAG);
-        if (TEST_FLAG === 'green') await playSimpleFlag('green');
-        else if (TEST_FLAG === 'yellow') await playSimpleFlag('yellow');
-        else if (TEST_FLAG === 'yellowWaving') await playYellowWaving();
-        else if (TEST_FLAG === 'blue') await playBlueFlag();
-        else if (TEST_FLAG === 'white') await playSimpleFlag('white');
-        else if (TEST_FLAG === 'red') await playSimpleFlag('white');
-        else if (TEST_FLAG === 'penalty') await playPenalty();
-        else if (TEST_FLAG === 'slowdown') await playSlowDown();
-        else if (TEST_FLAG === 'meatball') await playMeatball();
-        else if (TEST_FLAG === 'checkered') await playCheckered();
-        else if (TEST_FLAG === 'safetycar') await playSafetyCar(SAFETYCAR_LOOP_COUNT, SC_VARIANT);
-        else if (TEST_FLAG === 'debris') await playDebris();
-        else if (TEST_FLAG === 'oneLapToGreen') await playOneLapToGreen();
-        else if (TEST_FLAG === 'disqualify') await playDisqualify();
+        if (TEST_FLAG === 'green') await playSimpleFlag('green', FLAG_LOOP_COUNTS['green']);
+        else if (TEST_FLAG === 'yellow') await playSimpleFlag('yellow', FLAG_LOOP_COUNTS['yellow']);
+        else if (TEST_FLAG === 'yellowWaving') await playYellowWaving(FLAG_LOOP_COUNTS['yellowWaving']);
+        else if (TEST_FLAG === 'blue') await playBlueFlag(FLAG_LOOP_COUNTS['blue']);
+        else if (TEST_FLAG === 'white') await playSimpleFlag('white', FLAG_LOOP_COUNTS['white']);
+        else if (TEST_FLAG === 'red') await playSimpleFlag('white', FLAG_LOOP_COUNTS['white']);
+        else if (TEST_FLAG === 'penalty') await playPenalty(FLAG_LOOP_COUNTS['penalty']);
+        else if (TEST_FLAG === 'slowdown') await playSlowDown(FLAG_LOOP_COUNTS['slowdown']);
+        else if (TEST_FLAG === 'meatball') await playMeatball(FLAG_LOOP_COUNTS['meatball']);
+        else if (TEST_FLAG === 'checkered') await playCheckered(FLAG_LOOP_COUNTS['checkered']);
+        else if (TEST_FLAG === 'safetycar') await playSafetyCar(FLAG_LOOP_COUNTS['safetycar'], SC_VARIANT);
+        else if (TEST_FLAG === 'debris') await playDebris(FLAG_LOOP_COUNTS['debris']);
+        else if (TEST_FLAG === 'oneLapToGreen') await playOneLapToGreen(FLAG_LOOP_COUNTS['oneLapToGreen']);
+        else if (TEST_FLAG === 'disqualify') await playDisqualify(FLAG_LOOP_COUNTS['disqualify']);
         else if (TEST_FLAG === 'off') await playOff();
         else {
           console.error('Unknown flag:', TEST_FLAG);
@@ -1414,21 +1779,26 @@ async function runTestMode() {
     // Cycle through all flags
     while (TEST_MODE) {
       for (const flag of testFlags) {
+        // Skip disabled flags
+        if (!isFlagEnabled(flag)) {
+          debugLog('Skipping disabled flag:', flag);
+          continue;
+        }
         try {
           debugLog('Playing flag:', flag);
-          if (flag === 'green') await playSimpleFlag('green');
-          else if (flag === 'yellow') await playSimpleFlag('yellow');
-          else if (flag === 'yellowWaving') await playYellowWaving();
-          else if (flag === 'blue') await playBlueFlag();
-          else if (flag === 'white') await playSimpleFlag('white');
-          else if (flag === 'penalty') await playPenalty();
-          else if (flag === 'slowdown') await playSlowDown();
-          else if (flag === 'meatball') await playMeatball();
-          else if (flag === 'checkered') await playCheckered();
-          else if (flag === 'safetycar') await playSafetyCar(SAFETYCAR_LOOP_COUNT, SC_VARIANT);
-          else if (flag === 'debris') await playDebris();
-          else if (flag === 'oneLapToGreen') await playOneLapToGreen();
-          else if (flag === 'disqualify') await playDisqualify();
+          if (flag === 'green') await playSimpleFlag('green', FLAG_LOOP_COUNTS['green']);
+          else if (flag === 'yellow') await playSimpleFlag('yellow', FLAG_LOOP_COUNTS['yellow']);
+          else if (flag === 'yellowWaving') await playYellowWaving(FLAG_LOOP_COUNTS['yellowWaving']);
+          else if (flag === 'blue') await playBlueFlag(FLAG_LOOP_COUNTS['blue']);
+          else if (flag === 'white') await playSimpleFlag('white', FLAG_LOOP_COUNTS['white']);
+          else if (flag === 'penalty') await playPenalty(FLAG_LOOP_COUNTS['penalty']);
+          else if (flag === 'slowdown') await playSlowDown(FLAG_LOOP_COUNTS['slowdown']);
+          else if (flag === 'meatball') await playMeatball(FLAG_LOOP_COUNTS['meatball']);
+          else if (flag === 'checkered') await playCheckered(FLAG_LOOP_COUNTS['checkered']);
+          else if (flag === 'safetycar') await playSafetyCar(FLAG_LOOP_COUNTS['safetycar'], SC_VARIANT);
+          else if (flag === 'debris') await playDebris(FLAG_LOOP_COUNTS['debris']);
+          else if (flag === 'oneLapToGreen') await playOneLapToGreen(FLAG_LOOP_COUNTS['oneLapToGreen']);
+          else if (flag === 'disqualify') await playDisqualify(FLAG_LOOP_COUNTS['disqualify']);
           else if (flag === 'off') await playOff();
         } catch (e) {
           debugLog('Flag playback error', e);
@@ -1441,20 +1811,28 @@ async function runTestMode() {
 
 if (TEST_MODE) {
   debugLog('TEST_MODE is enabled, waiting for DOM to be ready...');
+  if (DEBUG_MODE) console.log('TEST_MODE: Waiting for config and DOM...');
+  
   // Wait for DOM to be ready before starting test mode
-  document.addEventListener('DOMContentLoaded', () => {
-    debugLog('DOM is ready, initializing app and starting test mode...');
+  const startTestMode = async () => {
+    debugLog('DOM is ready, initializing app and waiting for config...');
+    if (DEBUG_MODE) console.log('TEST_MODE: Initializing...');
+    await loadConfigFile();
+    if (DEBUG_MODE) console.log('TEST_MODE: Config loaded, starting test sequence...');
     initializeApp();
+    // Give initialization a moment to complete
+    await sleep(500);
     runTestMode();
-  });
+  };
+  
+  document.addEventListener('DOMContentLoaded', startTestMode);
   
   // Also try to start immediately in case DOM is already loaded
   if (document.readyState === 'loading') {
     debugLog('Document still loading...');
   } else {
-    debugLog('Document already loaded, initializing immediately...');
-    initializeApp();
-    runTestMode();
+    debugLog('Document already loaded, starting test mode immediately...');
+    startTestMode();
   }
 } else {
   debugLog('TEST_MODE is disabled');
@@ -1469,6 +1847,18 @@ if (TEST_MODE) {
 // Function to initialize DOM elements
 function initializeApp() {
   debugLog('Initializing app in', DISPLAY_MODE, 'mode...');
+  
+  // Load configuration file first
+  loadConfigFile().then(() => {
+    continueInitialization();
+  }).catch(() => {
+    // Continue even if config load fails
+    continueInitialization();
+  });
+}
+
+function continueInitialization() {
+  debugLog('Continuing initialization...');
   
   if (DISPLAY_MODE === 'split') {
     // Split mode
@@ -1533,22 +1923,32 @@ function initializeApp() {
   console.log('VFlag loaded, happy racing! ~Ash');
 }
 
+// Expose helper functions for CoffeeScript
+window.getFlagDuration = getFlagDuration;
+window.isFlagEnabled = isFlagEnabled;
+
 // Expose test functions
 window.flagTest = {
-  green: () => playSimpleFlag('green'),
-  yellow: () => playSimpleFlag('yellow'),
-  yellowWaving: () => playYellowWaving(),
-  blue: () => playBlueFlag(),
-  white: () => playSimpleFlag('white'),
-  red: () => playSimpleFlag('white'),
-  penalty: () => playPenalty(),
-  slowdown: () => playSlowDown(),
-  meatball: () => playMeatball(),
-  checkered: () => playCheckered(),
-  safetycar: () => playSafetyCar(),
-  debris: () => playDebris(),
-  oneLapToGreen: () => playOneLapToGreen(),
-  disqualify: () => playDisqualify(),
+  green: () => {
+    if (DEBUG_MODE) console.log(`[flagTest.green] called, FLAG_LOOP_COUNTS['green']=${FLAG_LOOP_COUNTS['green']}, enabled=${isFlagEnabled('green')}`);
+    return isFlagEnabled('green') ? playSimpleFlag('green', FLAG_LOOP_COUNTS['green']) : null;
+  },
+  yellow: () => {
+    if (DEBUG_MODE) console.log(`[flagTest.yellow] called, FLAG_LOOP_COUNTS['yellow']=${FLAG_LOOP_COUNTS['yellow']}, enabled=${isFlagEnabled('yellow')}`);
+    return isFlagEnabled('yellow') ? playSimpleFlag('yellow', FLAG_LOOP_COUNTS['yellow']) : null;
+  },
+  yellowWaving: () => isFlagEnabled('yellowWaving') ? playYellowWaving(FLAG_LOOP_COUNTS['yellowWaving']) : null,
+  blue: () => isFlagEnabled('blue') ? playBlueFlag(FLAG_LOOP_COUNTS['blue']) : null,
+  white: () => isFlagEnabled('white') ? playSimpleFlag('white', FLAG_LOOP_COUNTS['white']) : null,
+  red: () => isFlagEnabled('white') ? playSimpleFlag('white', FLAG_LOOP_COUNTS['white']) : null,
+  penalty: () => isFlagEnabled('penalty') ? playPenalty(FLAG_LOOP_COUNTS['penalty']) : null,
+  slowdown: () => isFlagEnabled('slowdown') ? playSlowDown(FLAG_LOOP_COUNTS['slowdown']) : null,
+  meatball: () => isFlagEnabled('meatball') ? playMeatball(FLAG_LOOP_COUNTS['meatball']) : null,
+  checkered: () => isFlagEnabled('checkered') ? playCheckered(FLAG_LOOP_COUNTS['checkered']) : null,
+  safetycar: () => isFlagEnabled('safetycar') ? playSafetyCar(FLAG_LOOP_COUNTS['safetycar']) : null,
+  debris: () => isFlagEnabled('debris') ? playDebris(FLAG_LOOP_COUNTS['debris']) : null,
+  oneLapToGreen: () => isFlagEnabled('oneLapToGreen') ? playOneLapToGreen(FLAG_LOOP_COUNTS['oneLapToGreen']) : null,
+  disqualify: () => isFlagEnabled('disqualify') ? playDisqualify(FLAG_LOOP_COUNTS['disqualify']) : null,
   debug: () => playDebug(),
   off: () => playOff()
 };
