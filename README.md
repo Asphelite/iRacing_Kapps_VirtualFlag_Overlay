@@ -322,15 +322,8 @@ Flags use a simple **ring queue**:
 - Each flag plays its animation, then the queue moves to the next flag
 - As flags become inactive in iRacing, they're automatically removed from the queue
 - New active flags are appended to the end of the queue, maintaining playback order
-- The green flag is the only flag that can overwrite other flags and their animations when it gets added to the queue. This is so that the green flag roughly starts playing when iRacing drops it too
-
-### Animation Sequences
-
-Each flag has its own unique animation:
-- **Simple flags** (Green, Yellow, White) - Flashing
-- **Complex animations** (OneLapToGo, Disqualify, Blue Flag, etc.) - LED patterns
-- **Caution flags** ((Double)Yellow, Debris, Safety Car) - Directional animations
 - Animations queue automatically without overlapping
+- The green flag is the only flag that can overwrite other flags and their animations when it gets added to the queue. This is so that the green flag roughly starts playing when iRacing drops it too
 
 ### Issues and / or Limitations
 - The app might not properly recognize that iRacing has closed, so if you dont hide the widget in the replay or when you're not in iRacing you might still see the last flag that was playing on constant loop. You can clear it by re-opening the overlay.
