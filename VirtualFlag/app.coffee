@@ -44,7 +44,7 @@ app.service 'iRService', ($rootScope) ->
 app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     $scope.ir = ir = iRService.data
     $scope.currentFlag = 'off'
-    $scope.flagMessage = '--'
+    $scope.flagMessage = 'Ready'
     clearAnimationTimer = null
     previousDisplayedFlag = null
     flagQueue = []  # Queue of flag names to display
@@ -119,7 +119,7 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     clearDisplay = ->
         console.log("Clearing display (calling 'off' animation)")
         $scope.currentFlag = 'off'
-        $scope.flagMessage = '--'
+        $scope.flagMessage = 'Ready'
         previousDisplayedFlag = null
         clearAnimationTimer = null
         currentQueueIndex = 0
@@ -143,54 +143,45 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     getSafetyCarDuration = ->
         return window.SAFETYCAR_DURATION_MS or 11600
     
-    FLAG_DURATIONS =
-        'checkered': 4000      # 2 frames × 500ms × 4 loops
-        'disqualify': 8000     # 2 frames × 1000ms × 4 loops
-        'penalty': 4000        # 2 frames × 500ms × 4 loops
-        'safetycar': getSafetyCarDuration()  # Dynamically set based on SC_VARIANT
-        'slowdown': 2000       # 2 frames × 500ms × 2 loops
-        'meatball': 4000       # 2 frames × 500ms × 4 loops
-        'yellowWaving': 2000   # 2 frames × 250ms × 4 loops
-        'yellow': 1500         # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
-        'debris': 3000         # 2 frames × 500ms × 3 loops (loopCount = 1500 / 500)
-        'oneLapToGreen': 2400  # 4 frames × 150ms × 4 loops
-        'blue': 1500           # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
-        'white': 1500          # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
-        'green': 1500          # simpleFlagDuration (DEFAULT_FLAG_DURATION_MS = 1500)
+    # Get flag duration from JavaScript overlay config (respects config.ini overrides)
+    getFlagDuration = (flagName) ->
+        return window.getFlagDuration(flagName) or 1500
     
-    # No priority system - using simple FIFO ring queue instead
-
+    # Helper function to check if flag is enabled from config
+    isFlagEnabled = (flagName) ->
+        return window.isFlagEnabled(flagName) != false
+    
     # Build active flags set from SessionFlags bitfield
     buildActiveFlagsFromBitfield = (sessionFlags) ->
         activeFlags = {}
 
         hasFlag = (flag) -> (sessionFlags & flag) != 0
 
-        if hasFlag(FLAGS.CHECKERED)
+        if hasFlag(FLAGS.CHECKERED) and isFlagEnabled('checkered')
             activeFlags['checkered'] = true
-        if hasFlag(FLAGS.DISQUALIFY)
+        if hasFlag(FLAGS.DISQUALIFY) and isFlagEnabled('disqualify')
             activeFlags['disqualify'] = true
-        if hasFlag(FLAGS.BLACK)
+        if hasFlag(FLAGS.BLACK) and isFlagEnabled('penalty')
             activeFlags['penalty'] = true
-        if hasFlag(FLAGS.CAUTION_WAVING) or hasFlag(FLAGS.CAUTION)
+        if (hasFlag(FLAGS.CAUTION_WAVING) or hasFlag(FLAGS.CAUTION)) and isFlagEnabled('safetycar')
             activeFlags['safetycar'] = true
-        if hasFlag(FLAGS.FURLED)
+        if hasFlag(FLAGS.FURLED) and isFlagEnabled('slowdown')
             activeFlags['slowdown'] = true
-        if hasFlag(FLAGS.REPAIR)
+        if hasFlag(FLAGS.REPAIR) and isFlagEnabled('meatball')
             activeFlags['meatball'] = true
-        if hasFlag(FLAGS.YELLOW_WAVING)
+        if hasFlag(FLAGS.YELLOW_WAVING) and isFlagEnabled('yellowWaving')
             activeFlags['yellowWaving'] = true
-        if hasFlag(FLAGS.YELLOW)
+        if hasFlag(FLAGS.YELLOW) and isFlagEnabled('yellow')
             activeFlags['yellow'] = true
-        if hasFlag(FLAGS.DEBRIS)
+        if hasFlag(FLAGS.DEBRIS) and isFlagEnabled('debris')
             activeFlags['debris'] = true
-        if hasFlag(FLAGS.BLUE)
+        if hasFlag(FLAGS.BLUE) and isFlagEnabled('blue')
             activeFlags['blue'] = true
-        if hasFlag(FLAGS.WHITE)
+        if hasFlag(FLAGS.WHITE) and isFlagEnabled('white')
             activeFlags['white'] = true
-        if hasFlag(FLAGS.GREEN)
+        if hasFlag(FLAGS.GREEN) and isFlagEnabled('green')
             activeFlags['green'] = true
-        if hasFlag(FLAGS.ONE_LAP_TO_GREEN) and sessionType and !sessionType.includes('test') and !sessionType.includes('offline') and !hasFlag(FLAGS.CHECKERED)
+        if hasFlag(FLAGS.ONE_LAP_TO_GREEN) and sessionType and !sessionType.includes('test') and !sessionType.includes('offline') and !hasFlag(FLAGS.CHECKERED) and isFlagEnabled('oneLapToGreen')
             activeFlags['oneLapToGreen'] = true
 
         return activeFlags
@@ -270,8 +261,9 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
                 console.log("Flag #{flag} triggered successfully")
                 
                 # Set timer to show next flag in queue after animation completes
-                duration = FLAG_DURATIONS[flag] or 1000
-                console.log("Scheduling next callback for #{flag} in #{duration}ms")
+                # Call getFlagDuration() dynamically to get current config values
+                duration = getFlagDuration(flag)
+                console.log("Scheduling next callback for #{flag} in #{duration}ms (from current config)")
                 clearAnimationTimer = $timeout(createAnimationCallback(flag), duration)
             catch e
                 console.error("Error triggering flag #{flag}:", e)
