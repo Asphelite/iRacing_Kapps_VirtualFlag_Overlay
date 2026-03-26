@@ -34,15 +34,15 @@ const DEFAULT_SIMPLE_FLAG_FRAME_MS = 750;  // Duration of each simple flag flash
 const GAP = 3;
 const TINY_MARGIN = 4;
 
-// Calculate Safety Car loop count and duration based on variant
-const getSafetyCarConfig = (variant) => {
+// Calculate Safety Car loop count and duration based on variant and frame durations
+const getSafetyCarConfig = (variant, simple1FrameMs = 150, simple2FrameMs = 1000) => {
   switch (variant) {
     case 'simple1':
-      // 4 frames × 150ms = 600ms per loop
-      return { loopCount: 4, durationMs: 2400 };
+      // 4 frames × frameMs per frame × 4 loops
+      return { loopCount: 4, durationMs: 4 * simple1FrameMs * 4 };
     case 'simple2':
-      // 2 frames × 1000ms = 2000ms per loop
-      return { loopCount: 2, durationMs: 4000 };
+      // 2 frames × frameMs per frame × 2 loops
+      return { loopCount: 2, durationMs: 2 * simple2FrameMs * 2 };
     case 'complex':
     default:
       // (8×500 + 8×100 + 1×1000)ms = 5800ms per loop
@@ -50,14 +50,16 @@ const getSafetyCarConfig = (variant) => {
   }
 };
 
-const SAFETYCAR_CONFIG = getSafetyCarConfig(SC_VARIANT);
-const SAFETYCAR_LOOP_COUNT = SAFETYCAR_CONFIG.loopCount;
-const SAFETYCAR_DURATION_MS = SAFETYCAR_CONFIG.durationMs;
+let SAFETYCAR_CONFIG = getSafetyCarConfig(SC_VARIANT);
+let SAFETYCAR_LOOP_COUNT = SAFETYCAR_CONFIG.loopCount;
+let SAFETYCAR_DURATION_MS = SAFETYCAR_CONFIG.durationMs;
 
 // Expose to window for CoffeeScript access
 window.SAFETYCAR_DURATION_MS = SAFETYCAR_DURATION_MS;
 window.SAFETYCAR_LOOP_COUNT = SAFETYCAR_LOOP_COUNT;
 window.SC_VARIANT = SC_VARIANT;
+window.TEST_MODE = TEST_MODE;
+window.TEST_FLAG = TEST_FLAG;
 
 debugLog('SC_VARIANT:', SC_VARIANT);
 debugLog('SAFETYCAR_LOOP_COUNT:', SAFETYCAR_LOOP_COUNT);
@@ -156,6 +158,15 @@ async function loadConfigFile() {
       console.warn('Config file not found (404), using default values');
       debugLog('Config file not found, using defaults');
       configLoaded = true;
+      
+      // Still expose configLoaded flag for CoffeeScript to proceed with defaults
+      window.configLoaded = true;
+      
+      // Notify CoffeeScript even though we're using defaults
+      if (window.onConfigLoaded && typeof window.onConfigLoaded === 'function') {
+        setTimeout(() => window.onConfigLoaded(), 0);
+      }
+      
       return false;
     }
     
@@ -163,13 +174,32 @@ async function loadConfigFile() {
     console.log('Config file loaded, parsing...');
     parseIniConfig(text);
     configLoaded = true;
+    
+    // Expose configLoaded flag to window for CoffeeScript to check
+    window.configLoaded = true;
+    
     console.log('Config file parsed successfully');
     debugLog('Config file loaded and parsed successfully');
+    
+    // Notify CoffeeScript that config is ready - it will re-evaluate flags
+    if (window.onConfigLoaded && typeof window.onConfigLoaded === 'function') {
+      setTimeout(() => window.onConfigLoaded(), 0);
+    }
+    
     return true;
   } catch (e) {
     console.error('Error loading config file:', e.message);
     debugLog('Error loading config file:', e);
     configLoaded = true;
+    
+    // Still expose configLoaded flag for CoffeeScript to proceed with defaults
+    window.configLoaded = true;
+    
+    // Notify CoffeeScript even though we encountered an error
+    if (window.onConfigLoaded && typeof window.onConfigLoaded === 'function') {
+      setTimeout(() => window.onConfigLoaded(), 0);
+    }
+    
     return false;
   }
 }
@@ -345,6 +375,14 @@ function parseIniConfig(iniText) {
   if (DEBUG_MODE) console.log(`Config parsed: ${flagsEnabledCount} flags_enabled, ${loopCountsCount} loop_counts${simpleFlagFrameUpdated ? ', 1 simple_flags' : ''}${frameDurationsUpdated > 0 ? `, ${frameDurationsUpdated} frame_durations` : ''}`);
   if (DEBUG_MODE) console.log('Parsed FLAG_LOOP_COUNTS:', JSON.stringify(FLAG_LOOP_COUNTS, null, 2));
   if (DEBUG_MODE) console.log('Parsed FLAG_ENABLED_CONFIG:', JSON.stringify(FLAG_ENABLED_CONFIG, null, 2));
+  
+  // Recalculate Safety Car config with actual frame durations from config.ini
+  SAFETYCAR_CONFIG = getSafetyCarConfig(SC_VARIANT, SAFETYCAR_SIMPLE1_FRAME_MS, SAFETYCAR_SIMPLE2_FRAME_MS);
+  SAFETYCAR_LOOP_COUNT = SAFETYCAR_CONFIG.loopCount;
+  SAFETYCAR_DURATION_MS = SAFETYCAR_CONFIG.durationMs;
+  window.SAFETYCAR_LOOP_COUNT = SAFETYCAR_LOOP_COUNT;
+  window.SAFETYCAR_DURATION_MS = SAFETYCAR_DURATION_MS;
+  if (DEBUG_MODE) console.log(`[Safety Car Config] Variant: ${SC_VARIANT}, Duration: ${SAFETYCAR_DURATION_MS}ms, Loops: ${SAFETYCAR_LOOP_COUNT}`);
 }
 
 // Helper function to calculate flag duration from loop count
@@ -394,6 +432,24 @@ let matrix = null;
 let matrixLeft = null;
 let matrixRight = null;
 let messageEl = null;
+
+// Initialize configLoaded flag that CoffeeScript will check
+window.configLoaded = false;
+
+// Track current active flags (set by CoffeeScript controller)
+window.currentActiveFlags = {};
+
+// Set current active flags (called by CoffeeScript when SessionFlags change)
+window.setCurrentActiveFlags = function(flagsObject) {
+  window.currentActiveFlags = flagsObject || {};
+  debugLog('Updated active flags:', window.currentActiveFlags);
+};
+
+// Check if a flag is still active (used to interrupt animation if flag cleared)
+window.isStillActive = function(flagName) {
+  const active = window.currentActiveFlags[flagName] === true;
+  return active;
+};
 
 let leds = [];
 let ledsLeft = [];
@@ -494,7 +550,7 @@ const safetyCarFrames_split = [
 ];
 
 // Safety Car - Simple variant (compact 16x16) - SC coords + animated rotating yellow border
-const safetyCarFrames_simple = [
+const getSafetyCarFrames_simple = () => [
   {
     pattern: (r, c) => {
       const S = [
@@ -562,7 +618,7 @@ const safetyCarFrames_simple = [
 ];
 
 // Safety Car - Simple variant (split 8x16) - SC coords + animated rotating yellow border
-const safetyCarFrames_simple_split = [
+const getSafetyCarFrames_simple_split = () => [
   {
     pattern: (r, c, side) => {
       if (side === 'left') {
@@ -646,7 +702,7 @@ const safetyCarFrames_simple_split = [
 ];
 
 // Safety Car - Simple2 variant (compact 16x16) - SC coords + solid yellow border + flashing animation
-const safetyCarFrames_simple2 = [
+const getSafetyCarFrames_simple2 = () => [
   {
     pattern: (r, c) => {
       const border = 1;
@@ -676,7 +732,7 @@ const safetyCarFrames_simple2 = [
 ];
 
 // Safety Car - Simple2 variant (split 8x16) - SC coords + solid yellow border + flashing animation
-const safetyCarFrames_simple2_split = [
+const getSafetyCarFrames_simple2_split = () => [
   {
     pattern: (r, c, side) => {
       const border = 1;
@@ -1316,6 +1372,8 @@ function rebuildMatrixCompact() {
 }
 
 function rebuildMatrixSplit() {
+  debugLog('[rebuildMatrixSplit] Starting to rebuild split matrix...');
+  
   // For split mode, we have two 16x8 matrices side by side with gap between them
   const panelSplit = document.getElementById('panel-split');
   const style = getComputedStyle(panelSplit);
@@ -1355,6 +1413,7 @@ function rebuildMatrixSplit() {
       ledsLeft.push(d);
     }
   }
+  debugLog('[rebuildMatrixSplit] Left matrix built: ledsLeft.length=' + ledsLeft.length);
 
   // Build right matrix (16 rows x 8 cols)
   matrixRight.innerHTML = '';
@@ -1372,9 +1431,11 @@ function rebuildMatrixSplit() {
       ledsRight.push(d);
     }
   }
+  debugLog('[rebuildMatrixSplit] Right matrix built: ledsRight.length=' + ledsRight.length);
 
   // Update leds reference to point to both
   leds = [...ledsLeft, ...ledsRight];
+  debugLog('[rebuildMatrixSplit] Complete! Total leds.length=' + leds.length + ', ledsLeft.length=' + ledsLeft.length + ', ledsRight.length=' + ledsRight.length);
 }
 
 // --- Utilities ---
@@ -1518,41 +1579,59 @@ function startIdleMonitor() {
 }
 
 async function drawFrame(frame, isFirst = false) {
-  if (DISPLAY_MODE === 'split') {
-    // Split mode: draw left and right matrices with their own pattern functions
-    ledsLeft.forEach((ld, i) => {
-      const row = Math.floor(i / MATRIX_COLS);
-      const col = i % MATRIX_COLS;
-      const color = frame.pattern(row, col, 'left');
-      ld.classList.add('no-transition');
-      ld.className = `led ${color} on no-transition`;
-      ld.style.opacity = 1;
-    });
+  try {
+    debugLog(`[drawFrame] DISPLAY_MODE=${DISPLAY_MODE}, ledsLeft.length=${ledsLeft?.length}, ledsRight.length=${ledsRight?.length}, leds.length=${leds.length}`);
     
-    ledsRight.forEach((ld, i) => {
-      const row = Math.floor(i / MATRIX_COLS);
-      const col = i % MATRIX_COLS;
-      const color = frame.pattern(row, col, 'right');
-      ld.classList.add('no-transition');
-      ld.className = `led ${color} on no-transition`;
-      ld.style.opacity = 1;
-    });
-  } else {
-    // Compact mode: normal drawing
-    leds.forEach((ld, i) => {
-      const row = Math.floor(i / MATRIX_COLS);
-      const col = i % MATRIX_COLS;
-      const color = frame.pattern(row, col);
-      ld.classList.add('no-transition');
-      ld.className = `led ${color} on no-transition`;
-      ld.style.opacity = 1;
-    });
-  }
+    if (DISPLAY_MODE === 'split') {
+      // Split mode: draw left and right matrices with their own pattern functions
+      if (!ledsLeft || ledsLeft.length === 0) {
+        console.error('[drawFrame] ERROR: ledsLeft is empty or undefined!');
+        return;
+      }
+      if (!ledsRight || ledsRight.length === 0) {
+        console.error('[drawFrame] ERROR: ledsRight is empty or undefined!');
+        return;
+      }
+      
+      ledsLeft.forEach((ld, i) => {
+        const row = Math.floor(i / MATRIX_COLS);
+        const col = i % MATRIX_COLS;
+        const color = frame.pattern(row, col, 'left');
+        ld.classList.add('no-transition');
+        ld.className = `led ${color} on no-transition`;
+        ld.style.opacity = 1;
+      });
+      
+      ledsRight.forEach((ld, i) => {
+        const row = Math.floor(i / MATRIX_COLS);
+        const col = i % MATRIX_COLS;
+        const color = frame.pattern(row, col, 'right');
+        ld.classList.add('no-transition');
+        ld.className = `led ${color} on no-transition`;
+        ld.style.opacity = 1;
+      });
+    } else {
+      // Compact mode: normal drawing
+      leds.forEach((ld, i) => {
+        const row = Math.floor(i / MATRIX_COLS);
+        const col = i % MATRIX_COLS;
+        const color = frame.pattern(row, col);
+        ld.classList.add('no-transition');
+        ld.className = `led ${color} on no-transition`;
+        ld.style.opacity = 1;
+      });
+    }
 
-  await sleep(frame.duration);
+    debugLog(`[drawFrame] sleeping for ${frame.duration}ms`);
+    await sleep(frame.duration);
+    debugLog(`[drawFrame] sleep complete`);
 
-  if (frame.fade) {
-    await fadeOutToBlack(frame.fadeDuration);
+    if (frame.fade) {
+      await fadeOutToBlack(frame.fadeDuration);
+    }
+  } catch (e) {
+    console.error('[drawFrame] EXCEPTION:', e);
+    throw e;
   }
 }
 
@@ -1560,14 +1639,27 @@ async function drawFrame(frame, isFirst = false) {
 async function playSimpleFlag(color, loopCount = 1) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? createSimpleFlagFrames_split(color) : createSimpleFlagFrames(color);
-  if (DEBUG_MODE) console.log(`[playSimpleFlag] color=${color}, loopCount=${loopCount}, frameMs=${SIMPLE_FLAG_FRAME_MS}, totalDuration=${SIMPLE_FLAG_FRAME_MS * 2 * loopCount}ms`);
+  debugLog(`[playSimpleFlag] color=${color}, loopCount=${loopCount}, frames.length=${frames.length}, frameMs=${SIMPLE_FLAG_FRAME_MS}`);
+  debugLog(`[playSimpleFlag] color=${color}, loopCount=${loopCount}, frameMs=${SIMPLE_FLAG_FRAME_MS}, totalDuration=${SIMPLE_FLAG_FRAME_MS * 2 * loopCount}ms`);
+  
+  if (!frames || frames.length === 0) {
+    console.error(`[playSimpleFlag] ERROR: frames array is empty for color=${color}!`);
+    return;
+  }
   
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive(color.toLowerCase())) {
+      debugLog(`${color} flag interrupted - no longer active`);
+      break;
+    }
     for (const frame of frames) {
+      debugLog(`[playSimpleFlag] Drawing frame for ${color}, frame.duration=${frame.duration}`);
       await drawFrame(frame);
       messageEl.textContent = color.toUpperCase();
     }
   }
+  debugLog(`[playSimpleFlag] Finished: ${color}`);
   if (window.onFlagAnimationComplete) window.onFlagAnimationComplete();
 }
 
@@ -1575,6 +1667,11 @@ async function playPenalty(loopCount = FLAG_LOOP_COUNTS['penalty']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? penaltyFrames_split : penaltyFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('penalty')) {
+      debugLog('Penalty flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'PENALTY';
@@ -1587,6 +1684,11 @@ async function playYellowWaving(loopCount = FLAG_LOOP_COUNTS['yellowWaving']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? yellowWavingFrames_split : yellowWavingFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('yellowWaving')) {
+      debugLog('Yellow Waving flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'DOUBLE YELLOW';
@@ -1599,6 +1701,11 @@ async function playSlowDown(loopCount = FLAG_LOOP_COUNTS['slowdown']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? slowDownFrames_split : slowDownFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('slowdown')) {
+      debugLog('Slowdown flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'SLOWDOWN';
@@ -1611,6 +1718,11 @@ async function playMeatball(loopCount = FLAG_LOOP_COUNTS['meatball']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? meatballFrames_split : meatballFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('meatball')) {
+      debugLog('Meatball flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'MEATBALL';
@@ -1623,6 +1735,11 @@ async function playCheckered(loopCount = FLAG_LOOP_COUNTS['checkered']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? checkeredFrames_split : checkeredFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('checkered')) {
+      debugLog('Checkered flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'CHECKERED';
@@ -1636,15 +1753,20 @@ async function playSafetyCar(loopCount = FLAG_LOOP_COUNTS['safetycar'], variant 
   
   let frames;
   if (variant === 'simple1') {
-    frames = DISPLAY_MODE === 'split' ? safetyCarFrames_simple_split : safetyCarFrames_simple;
+    frames = DISPLAY_MODE === 'split' ? getSafetyCarFrames_simple_split() : getSafetyCarFrames_simple();
   } else if (variant === 'simple2') {
-    frames = DISPLAY_MODE === 'split' ? safetyCarFrames_simple2_split : safetyCarFrames_simple2;
+    frames = DISPLAY_MODE === 'split' ? getSafetyCarFrames_simple2_split() : getSafetyCarFrames_simple2();
   } else {
     // Default to complex variant
     frames = DISPLAY_MODE === 'split' ? safetyCarFrames_split : safetyCarFrames;
   }
   
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('safetycar')) {
+      debugLog('Safety Car flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'SAFETY CAR';
@@ -1657,6 +1779,11 @@ async function playDebris(loopCount = FLAG_LOOP_COUNTS['debris']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? debrisFrames_split : debrisFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('debris')) {
+      debugLog('Debris flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'DEBRIS';
@@ -1669,6 +1796,11 @@ async function playBlueFlag(loopCount = FLAG_LOOP_COUNTS['blue']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? blueFrames_split : blueFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('blue')) {
+      debugLog('Blue flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'BLUE';
@@ -1681,6 +1813,11 @@ async function playOneLapToGreen(loopCount = FLAG_LOOP_COUNTS['oneLapToGreen']) 
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? oneLapToGreenFrames_split : oneLapToGreenFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('oneLapToGreen')) {
+      debugLog('One Lap To Green flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = '1 LAP TO GREEN';
@@ -1693,6 +1830,11 @@ async function playDisqualify(loopCount = FLAG_LOOP_COUNTS['disqualify']) {
   resetIdleTimer();
   const frames = DISPLAY_MODE === 'split' ? disqualifyFrames_split : disqualifyFrames;
   for (let loop = 0; loop < loopCount; loop++) {
+    // Check if flag should be interrupted
+    if (!window.isStillActive('disqualify')) {
+      debugLog('Disqualify flag interrupted - no longer active');
+      break;
+    }
     for (const frame of frames) {
       await drawFrame(frame);
       messageEl.textContent = 'DQ';
@@ -1739,11 +1881,27 @@ async function playDebug(duration = 1500) {
 
 // --- Test Mode ---
 async function runTestMode() {
+  console.log('=== TEST MODE STARTED ===');
+  debugLog('leds.length:', leds.length);
+  debugLog('matrix:', matrix);
+  debugLog('DISPLAY_MODE:', DISPLAY_MODE);
+  debugLog('testFlags:', testFlags);
+  debugLog('FLAG_ENABLED_CONFIG:', FLAG_ENABLED_CONFIG);
+  debugLog('TEST_FLAG:', TEST_FLAG);
+  
+  // In test mode, we need to mark all flags as active so they don't get interrupted
+  window.currentActiveFlags = {
+    'green': true, 'yellow': true, 'yellowWaving': true, 'blue': true, 'white': true,
+    'penalty': true, 'slowdown': true, 'meatball': true, 'checkered': true,
+    'safetycar': true, 'debris': true, 'oneLapToGreen': true, 'disqualify': true, 'off': true
+  };
+  debugLog('[TEST MODE] Set currentActiveFlags to allow animations to run');
+  
   debugLog('Starting test mode...');
   
   // If a specific flag is requested, loop only that flag
   if (TEST_FLAG) {
-    debugLog('Testing specific flag:', TEST_FLAG);
+    debugLog('[TEST_FLAG PATH] Testing specific flag:', TEST_FLAG);
     while (TEST_MODE) {
       try {
         if (!isFlagEnabled(TEST_FLAG)) {
@@ -1751,7 +1909,7 @@ async function runTestMode() {
           await sleep(1000);
           continue;
         }
-        debugLog('Playing flag:', TEST_FLAG);
+        debugLog('[TEST_FLAG PATH] Now playing:', TEST_FLAG);
         if (TEST_FLAG === 'green') await playSimpleFlag('green', FLAG_LOOP_COUNTS['green']);
         else if (TEST_FLAG === 'yellow') await playSimpleFlag('yellow', FLAG_LOOP_COUNTS['yellow']);
         else if (TEST_FLAG === 'yellowWaving') await playYellowWaving(FLAG_LOOP_COUNTS['yellowWaving']);
@@ -1772,19 +1930,23 @@ async function runTestMode() {
           break;
         }
       } catch (e) {
+        console.error('[TEST_FLAG PATH] Error during playback:', e);
         debugLog('Flag playback error', e);
       }
     }
   } else {
     // Cycle through all flags
+    console.log('[ALL FLAGS PATH] Cycling through all flags. testFlags array:', testFlags);
     while (TEST_MODE) {
       for (const flag of testFlags) {
+        console.log(`[ALL FLAGS PATH] Checking flag "${flag}": isFlagEnabled=${isFlagEnabled(flag)}`);
         // Skip disabled flags
         if (!isFlagEnabled(flag)) {
-          debugLog('Skipping disabled flag:', flag);
+          debugLog(`[ALL FLAGS PATH] Skipping disabled flag: ${flag}`);
           continue;
         }
         try {
+          console.log(`[ALL FLAGS PATH] Now playing flag: ${flag}`);
           debugLog('Playing flag:', flag);
           if (flag === 'green') await playSimpleFlag('green', FLAG_LOOP_COUNTS['green']);
           else if (flag === 'yellow') await playSimpleFlag('yellow', FLAG_LOOP_COUNTS['yellow']);
@@ -1800,10 +1962,13 @@ async function runTestMode() {
           else if (flag === 'oneLapToGreen') await playOneLapToGreen(FLAG_LOOP_COUNTS['oneLapToGreen']);
           else if (flag === 'disqualify') await playDisqualify(FLAG_LOOP_COUNTS['disqualify']);
           else if (flag === 'off') await playOff();
+          console.log(`[ALL FLAGS PATH] Finished playing: ${flag}`);
         } catch (e) {
+          console.error(`[ALL FLAGS PATH] Error playing flag "${flag}":`, e);
           debugLog('Flag playback error', e);
         }
       }
+      debugLog('[ALL FLAGS PATH] Clearing display between cycles...');
       await playClear(2000);
     }
   }
@@ -1811,17 +1976,14 @@ async function runTestMode() {
 
 if (TEST_MODE) {
   debugLog('TEST_MODE is enabled, waiting for DOM to be ready...');
-  if (DEBUG_MODE) console.log('TEST_MODE: Waiting for config and DOM...');
   
   // Wait for DOM to be ready before starting test mode
   const startTestMode = async () => {
     debugLog('DOM is ready, initializing app and waiting for config...');
-    if (DEBUG_MODE) console.log('TEST_MODE: Initializing...');
-    await loadConfigFile();
-    if (DEBUG_MODE) console.log('TEST_MODE: Config loaded, starting test sequence...');
-    initializeApp();
-    // Give initialization a moment to complete
-    await sleep(500);
+    await initializeApp();
+    // Give DOM time to lay out and matrix to fully initialize
+    await sleep(1000);
+
     runTestMode();
   };
   
@@ -1845,16 +2007,20 @@ if (TEST_MODE) {
 }
 
 // Function to initialize DOM elements
-function initializeApp() {
+async function initializeApp() {
+  console.log('[VirtualFlag] Initializing in', DISPLAY_MODE, 'mode...');
   debugLog('Initializing app in', DISPLAY_MODE, 'mode...');
   
   // Load configuration file first
-  loadConfigFile().then(() => {
-    continueInitialization();
-  }).catch(() => {
-    // Continue even if config load fails
-    continueInitialization();
-  });
+  try {
+    await loadConfigFile();
+  } catch (e) {
+    console.warn('[VirtualFlag] Config load failed:', e);
+    debugLog('Config load failed:', e);
+  }
+  
+  // Continue with initialization
+  continueInitialization();
 }
 
 function continueInitialization() {

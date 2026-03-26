@@ -7,11 +7,6 @@ Features 14+ flag animations with intelligent queuing and split/compact display 
 
 [Watch the demo on YouTube](https://youtu.be/-9FrQy7Lx7M)
 
-## Discord
-
-I made a Discord Server specifically for all my mods so I can provide support and post updates freely.
-
-[Asphelite's Modding Discord Invite Link](https://discord.gg/rfqx7Wx7MB)
 
 <!-- ## Quick Start -->
 
@@ -62,7 +57,7 @@ Next we add the widget to your overlay.
 5. Click the `Add Custom Overlay` button to add a new overlay
 6. Now we populate the fields:   -
    - Name: You can add a name of your choice.
-   - URL: `http://127.0.0.1:8182/VirtualFlag/` - This has to be this link.
+   - URL: `http://127.0.0.1:8182/VirtualFlag/` - This has to be this link. If this does not work, try 'localhost' instead of '127.0.0.1'.
 
 ![Yours could look like this too...](images/Kapps_AddCustomOverlay.png)
 
@@ -290,6 +285,7 @@ green, yellow, yellowWaving, blue, white, penalty, disqualify, meatball, slowdow
 
 ### For anything more complex
 - Text Asphelite on [Asphelite's Modding Discord](https://discord.gg/rfqx7Wx7MB)
+  - Ping me in the helpdesk on this Discord in case I dont notice you right away.
 - This is guide pretty self explanatory but I'll try my best to help you.
 
 

@@ -1,5 +1,5 @@
 window.IRacing = class IRacing
-    constructor: (@requestParams=[], @requestParamsOnce=[], @fps=1, @server='127.0.0.1:8182', @readIbt=false, @record=null) ->
+    constructor: (@requestParams=[], @requestParamsOnce=[], @fps=1, @server='localhost:8182', @readIbt=false, @record=null) ->
         @data = {}
         @onConnect = null
         @onDisconnect = null

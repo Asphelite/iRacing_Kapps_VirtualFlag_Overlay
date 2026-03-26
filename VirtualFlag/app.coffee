@@ -25,8 +25,13 @@ FLAGS =
     DISQUALIFY: 0x00020000
 
 app.service 'iRService', ($rootScope) ->
+    # Skip WebSocket connection during test mode - test mode is independent
+    if window.TEST_MODE
+        console.log('TEST_MODE active - skipping WebSocket connection')
+        return { data: {} }  # Return empty data object for test mode
+    
     ir = new IRacing ['SessionFlags', 'SessionInfo'], [], 100
-    console.log('iRService initialized, connecting to Kapps at 127.0.0.1:8182...')
+    console.log('iRService initialized, connecting to Kapps at localhost:8182...')
 
     ir.onConnect = ->
         console.log('Connected to Kapps WebSocket')
@@ -50,6 +55,11 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     flagQueue = []  # Queue of flag names to display
     currentQueueIndex = 0
     sessionType = null  # Will be 'race', 'practice', 'qualify', 'test', etc.
+    
+    # Debug logging helper
+    debugLog = (message, args...) ->
+        if window.DEBUG_MODE
+            console.log(message, args...)
     
     console.log('FlagCtrl initialized, ir object:', ir)
     
@@ -81,12 +91,12 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
             newType = detectSessionType(info)
             if newType != sessionType
                 sessionType = newType
-                console.log("Session type detected:", sessionType)
+                debugLog("Session type detected:", sessionType)
                 
                 # Re-evaluate flags when session type changes (e.g., removing oneLapToGreen)
                 currentSessionFlags = ir.SessionFlags
                 if currentSessionFlags
-                    console.log("Session type changed, re-evaluating flags...")
+                    debugLog("Session type changed, re-evaluating flags...")
                     activeFlags = buildActiveFlagsFromBitfield(currentSessionFlags)
                     
                     # Rebuild queue: keep active flags, remove inactive ones
@@ -95,29 +105,29 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
                         if activeFlags[existingFlag]
                             newQueue.push(existingFlag)
                         else
-                            console.log("Removing inactive flag after session change: #{existingFlag}")
+                            debugLog("Removing inactive flag after session change: #{existingFlag}")
                     
                     # Add any new active flags
                     for flagName of activeFlags
                         if flagName not in newQueue
-                            console.log("Adding new flag after session change: #{flagName}")
+                            debugLog("Adding new flag after session change: #{flagName}")
                             newQueue.push(flagName)
                     
                     flagQueue = newQueue
-                    console.log("Queue re-evaluated after session type change: #{flagQueue.join(', ')}")
+                    debugLog("Queue re-evaluated after session type change: #{flagQueue.join(', ')}")
                     
                     # If queue is not empty and nothing is playing, start playback
                     if previousDisplayedFlag == null and flagQueue.length > 0
-                        console.log("Starting playback of queue after session change")
+                        debugLog("Starting playback of queue after session change")
                         triggerFlag(flagQueue[0])
                     else if flagQueue.length == 0
-                        console.log("No flags active after session change, clearing display")
+                        debugLog("No flags active after session change, clearing display")
                         clearDisplay()
 
     
     # Helper function to clear the display
     clearDisplay = ->
-        console.log("Clearing display (calling 'off' animation)")
+        debugLog("Clearing display (calling 'off' animation)")
         $scope.currentFlag = 'off'
         $scope.flagMessage = 'Ready'
         previousDisplayedFlag = null
@@ -145,14 +155,28 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
     
     # Get flag duration from JavaScript overlay config (respects config.ini overrides)
     getFlagDuration = (flagName) ->
-        return window.getFlagDuration(flagName) or 1500
+        duration = window.getFlagDuration(flagName)
+        if !duration or duration <= 0
+            console.warn("Invalid duration for flag #{flagName}: #{duration}, using default 2000ms")
+            return 2000
+        debugLog("Got duration for #{flagName}: #{duration}ms")
+        return duration
     
     # Helper function to check if flag is enabled from config
     isFlagEnabled = (flagName) ->
+        # Wait for config to be loaded before evaluating flags
+        if window.configLoaded != true
+            console.warn("Config not loaded yet, deferring flag check for: #{flagName}")
+            return false
         return window.isFlagEnabled(flagName) != false
     
     # Build active flags set from SessionFlags bitfield
     buildActiveFlagsFromBitfield = (sessionFlags) ->
+        # Abort if config hasn't loaded yet - we'll re-evaluate when it does
+        if window.configLoaded != true
+            debugLog("Config not loaded yet, skipping flag evaluation for flags: 0x#{sessionFlags.toString(16)}")
+            return {}
+        
         activeFlags = {}
 
         hasFlag = (flag) -> (sessionFlags & flag) != 0
@@ -184,16 +208,20 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
         if hasFlag(FLAGS.ONE_LAP_TO_GREEN) and sessionType and !sessionType.includes('test') and !sessionType.includes('offline') and !hasFlag(FLAGS.CHECKERED) and isFlagEnabled('oneLapToGreen')
             activeFlags['oneLapToGreen'] = true
 
+        # Expose active flags to JavaScript for interrupt logic
+        if window.setCurrentActiveFlags
+            window.setCurrentActiveFlags(activeFlags)
+
         return activeFlags
 
     # Create a callback with proper variable capture
     createAnimationCallback = (flagName) ->
         ->
-            console.log("Animation finished for flag: #{flagName}, checking queue...")
+            debugLog("Animation finished for flag: #{flagName}, checking queue...")
             currentSessionFlags = ir.SessionFlags
-            console.log("Current SessionFlags: 0x#{currentSessionFlags.toString(16)}")
+            debugLog("Current SessionFlags: 0x#{currentSessionFlags.toString(16)}")
             activeFlags = buildActiveFlagsFromBitfield(currentSessionFlags)
-            console.log("Active flags after timer: #{Object.keys(activeFlags).join(', ')}")
+            debugLog("Active flags after timer: #{Object.keys(activeFlags).join(', ')}")
             
             # Update queue: keep existing flags, remove inactive ones, add new ones to the end (FIFO)
             newQueue = []
@@ -203,52 +231,58 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
                 if activeFlags[existingFlag]
                     newQueue.push(existingFlag)
                 else
-                    console.log("Removing inactive flag from queue: #{existingFlag}")
+                    debugLog("Removing inactive flag from queue: #{existingFlag}")
             
             # Then, add any new active flags that aren't in the queue yet
             for flagNameInActive of activeFlags
                 if flagNameInActive not in newQueue
-                    console.log("Adding new flag to end of queue: #{flagNameInActive}")
+                    debugLog("Adding new flag to end of queue: #{flagNameInActive}")
                     newQueue.push(flagNameInActive)
             
             flagQueue = newQueue
-            console.log("Queue updated (FIFO): #{flagQueue.join(', ')}")
+            debugLog("Queue updated (FIFO): #{flagQueue.join(', ')}")
             
             if flagQueue.length == 0
-                console.log("No more flags in queue, clearing display")
+                debugLog("No more flags in queue, clearing display")
                 clearDisplay()
             else
                 # Find the current flag in the updated queue and advance to next
                 currentFlagIndex = flagQueue.indexOf(flagName)
-                console.log("Flag #{flagName} is at index #{currentFlagIndex} in queue (queue length: #{flagQueue.length})")
+                debugLog("Flag #{flagName} is at index #{currentFlagIndex} in queue (queue length: #{flagQueue.length})")
                 
                 if currentFlagIndex == -1
                     # Current flag was removed, start from beginning
-                    console.log("Current flag was removed from queue, starting from beginning")
+                    debugLog("Current flag was removed from queue, starting from beginning")
                     currentQueueIndex = 0
                 else
                     # If only one flag in queue, don't loop it infinitely - just keep showing it
                     if flagQueue.length == 1
-                        console.log("Only one flag in queue, keeping it displayed")
-                        currentQueueIndex = 0
+                        debugLog("Only one flag in queue, scheduling smooth replay via next digest")
+                        # Retrigger for the next animation cycle
+                        # Using $timeout with 0ms defers to next Angular digest, preventing tight millisecond loops
+                        nextFlag = flagQueue[0]
+                        clearAnimationTimer = $timeout(->
+                            triggerFlag(nextFlag)
+                        , 0)  # 0ms defers to next digest cycle - looks seamless, prevents lag
+                        return
                     else
                         # Advance to next flag in queue
                         nextIndex = (currentFlagIndex + 1) % flagQueue.length
-                        console.log("Advancing from index #{currentFlagIndex} to index #{nextIndex}")
+                        debugLog("Advancing from index #{currentFlagIndex} to index #{nextIndex}")
                         currentQueueIndex = nextIndex
                 
                 nextFlag = flagQueue[currentQueueIndex]
-                console.log("Triggering next flag in queue: #{nextFlag} (index #{currentQueueIndex})")
+                debugLog("Triggering next flag in queue: #{nextFlag} (index #{currentQueueIndex})")
                 triggerFlag(nextFlag)
 
     # Function to trigger flag display in JavaScript overlay
     triggerFlag = (flag) ->
-        console.log("Triggering flag: #{flag}")
+        debugLog("Triggering flag: #{flag}")
         
         # Cancel any pending timer
         if clearAnimationTimer
             $timeout.cancel(clearAnimationTimer)
-            console.log("Cancelled pending timer")
+            debugLog("Cancelled pending timer")
         
         previousDisplayedFlag = flag
         $scope.currentFlag = flag
@@ -258,51 +292,84 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
         if window.flagTest and typeof window.flagTest[flag] == 'function'
             try
                 window.flagTest[flag]()
-                console.log("Flag #{flag} triggered successfully")
+                debugLog("Flag #{flag} triggered successfully")
                 
                 # Set timer to show next flag in queue after animation completes
                 # Call getFlagDuration() dynamically to get current config values
                 duration = getFlagDuration(flag)
-                console.log("Scheduling next callback for #{flag} in #{duration}ms (from current config)")
+                
+                # Validate duration value
+                if !duration or typeof duration != 'number' or duration <= 0
+                    console.error("INVALID DURATION for flag #{flag}: #{duration}, using fallback 2000ms")
+                    duration = 2000
+                else
+                    debugLog("Scheduling next callback for #{flag} in #{duration}ms")
+                
                 clearAnimationTimer = $timeout(createAnimationCallback(flag), duration)
             catch e
                 console.error("Error triggering flag #{flag}:", e)
+                # Schedule a fallback check in case of error
+                clearAnimationTimer = $timeout(createAnimationCallback(flag), 3000)
         else
             console.error("Critical: Flag #{flag} not available in overlay")
 
+    # Register callback for when config loads - re-evaluate current flags
+    window.onConfigLoaded = ->
+        console.log("Config loaded! Re-evaluating current flags...")
+        if !window.DEBUG_MODE
+            console.log("Tip: To see detailed debug logs, enable debug in your VirtualFlag overlay using the URL parameter '&debug=true'")
+        if ir.SessionFlags
+            # Force re-evaluation by manually triggering the flag check
+            currentFlags = ir.SessionFlags
+            debugLog("Re-evaluating SessionFlags after config load: 0x#{currentFlags.toString(16)}")
+            
+            # Re-build active flags with updated config
+            activeFlags = buildActiveFlagsFromBitfield(currentFlags)
+            debugLog("Active flags after config load: #{Object.keys(activeFlags).join(', ')}")
+            
+            # Process flags the same way as the watcher would
+            if Object.keys(activeFlags).length > 0
+                # Re-trigger flag evaluation
+                $scope.$apply()
+    
     # Watch for iRacing connection status by checking if data is available
     $scope.$watch 'ir.SessionFlags', (flags) ->
+        # Skip watcher if test mode is active - test mode manages flags independently
+        if window.TEST_MODE
+            debugLog('TEST_MODE is active, skipping SessionFlags watcher')
+            return
+        
         # This watcher will handle both the main flag watching AND disconnection detection
         # When iRacing disconnects, SessionFlags becomes undefined
         if flags == undefined or flags == null
             if flagQueue.length > 0
-                console.log("Flags are null/undefined - iRacing likely disconnected, clearing queue")
+                debugLog("Flags are null/undefined - iRacing likely disconnected, clearing queue")
                 flagQueue = []
                 clearDisplay()
             return
 
-        console.log('SessionFlags updated: 0x' + flags.toString(16))
-        console.log("Checking GREEN flag: (flags & 0x04) = " + (flags & 0x04) + " (should be non-zero if green is active)")
+        debugLog('SessionFlags updated: 0x' + flags.toString(16))
+        debugLog("Checking GREEN flag: (flags & 0x04) = " + (flags & 0x04) + " (should be non-zero if green is active)")
 
         # Build set of currently active flags
         activeFlags = buildActiveFlagsFromBitfield(flags)
-        console.log("Active flags: #{Object.keys(activeFlags).join(', ')}")
-        console.log("activeFlags['green'] = " + activeFlags['green'])
+        debugLog("Active flags: #{Object.keys(activeFlags).join(', ')}")
+        debugLog("activeFlags['green'] = " + activeFlags['green'])
 
         # If green flag is active, prioritize it - clear queue and show green first
         if activeFlags['green']
-            console.log("Green flag detected, prioritizing it in queue")
+            debugLog("Green flag detected, prioritizing it in queue")
             flagQueue = ['green']
-            console.log("Queue reset to show green flag first")
+            debugLog("Queue reset to show green flag first")
             
             # Interrupt any currently playing flag and start green immediately
             if previousDisplayedFlag != null
-                console.log("Green flag interrupting currently playing flag: #{previousDisplayedFlag}")
+                debugLog("Green flag interrupting currently playing flag: #{previousDisplayedFlag}")
                 if clearAnimationTimer
                     $timeout.cancel(clearAnimationTimer)
-                    console.log("Cancelled animation timer for: #{previousDisplayedFlag}")
+                    debugLog("Cancelled animation timer for: #{previousDisplayedFlag}")
             
-            console.log("Starting playback with green flag (interrupting any other flag)")
+            debugLog("Starting playback with green flag (interrupting any other flag)")
             triggerFlag('green')
         else
             # Normal queue management when green is not active
@@ -314,24 +381,24 @@ app.controller 'FlagCtrl', ($scope, iRService, $timeout) ->
                 if activeFlags[existingFlag]
                     newQueue.push(existingFlag)
                 else
-                    console.log("Removing inactive flag: #{existingFlag}")
+                    debugLog("Removing inactive flag: #{existingFlag}")
             
             # Add any new active flags to the end
             for flagName of activeFlags
                 if flagName not in newQueue
-                    console.log("Adding new flag to end: #{flagName}")
+                    debugLog("Adding new flag to end: #{flagName}")
                     newQueue.push(flagName)
             
             flagQueue = newQueue
-            console.log("Ring queue updated: #{flagQueue.join(', ')}")
+            debugLog("Ring queue updated: #{flagQueue.join(', ')}")
             
             # If nothing is playing and we have flags, start playback
             if previousDisplayedFlag == null and flagQueue.length > 0
-                console.log("Starting ring queue playback")
+                debugLog("Starting ring queue playback")
                 currentQueueIndex = 0
                 triggerFlag(flagQueue[0])
             else if flagQueue.length == 0
-                console.log("No flags active, clearing display")
+                debugLog("No flags active, clearing display")
                 clearDisplay()
 
     return
